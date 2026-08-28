@@ -1,5 +1,5 @@
 package interchange
-namespace released_domain_envelope_v2
+namespace interchange
 
 entity CoreRelease id "gooo://release/v0.4.0-dev"
 entity LocalRelease id "gooo://local-ledger/release/v0.8.0-dev"
