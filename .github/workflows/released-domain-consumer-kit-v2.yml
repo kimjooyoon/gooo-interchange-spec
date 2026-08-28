@@ -137,9 +137,9 @@ jobs:
             valid_unknown_cases:1,
             unknown_coordinate_fields:6
           }' "$RUNNER_TEMP"/consumer-reports/*.json > "$RUNNER_TEMP/envelope-observation.json"
-          jq -e '.claim.state=="UNKNOWN" and
-            (.claim|has("stage") and has("step") and has("reason") and has("unknown_class") and has("next_operation") and has("blocked_by"))' \
+          jq -e '.decision=="CONFORMANT" and .summary.closed==10 and .summary.unknowns==1' \
             "$RUNNER_TEMP/spec-artifact/valid-unknown-report.json" >/dev/null
+          jq -e '.cells[]|select(.id=="UNKNOWN_COORDINATES" and .state=="CLOSED")' "$RUNNER_TEMP/report" >/dev/null
 
           archive_a=$(sha256sum "$RUNNER_TEMP/package-a/gooo-interchange-consumer-kit-v2.tar.gz"|awk '{print $1}')
           archive_b=$(sha256sum "$RUNNER_TEMP/package-b/gooo-interchange-consumer-kit-v2.tar.gz"|awk '{print $1}')
