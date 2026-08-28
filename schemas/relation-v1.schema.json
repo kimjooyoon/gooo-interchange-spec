@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gooo://schema/interchange/relation/v1",
+  "type": "object",
+  "required": ["schema", "id", "kind", "state", "left", "right", "evidence", "stage", "step", "reason", "unknown_class", "next_operation"],
+  "properties": {
+    "schema": {"const": "gooo/interchange/relation/v1"},
+    "state": {"enum": ["MATCH", "MISMATCH", "UNKNOWN"]},
+    "left": {"type": "object", "required": ["kind", "id"]},
+    "right": {"type": "object", "required": ["kind", "id"]},
+    "evidence": {"type": "object", "required": ["expected_sha256", "observed_sha256"]},
+    "stage": {"type": "string"},
+    "step": {"type": "string"},
+    "reason": {"type": "string"},
+    "unknown_class": {"type": ["string", "null"]},
+    "next_operation": {"type": "string"}
+  }
+}

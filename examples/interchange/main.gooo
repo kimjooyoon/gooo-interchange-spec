@@ -1,0 +1,29 @@
+package interchange
+namespace interchange
+
+entity GoooRelease id "gooo://release/v0.2.0-dev"
+entity LinkObservation id "gooo://link/release/v0.4.0-dev/three-domain-observation"
+entity PromotionUnknown id "gooo://interchange/entity/promotion-unknown"
+entity InterchangeAuthority id "gooo://interchange/entity/authority-v1"
+entity ProjectEnvelope id "gooo://interchange/entity/project-envelope-v1"
+entity RelationEnvelope id "gooo://interchange/entity/relation-envelope-v1"
+entity UnknownTuple id "gooo://interchange/entity/unknown-tuple-v1"
+entity FiveFileBundleSet id "gooo://interchange/entity/five-file-bundles-v1"
+entity SixLocalChecks id "gooo://interchange/entity/six-local-checks-v1"
+entity NineGoldenFixtures id "gooo://interchange/entity/nine-golden-fixtures-v1"
+entity ReplayObservation id "gooo://interchange/entity/replay-observation-v1"
+entity ExternalGateCount id "gooo://interchange/entity/external-gate-count-v1"
+entity SpecificationDecision id "gooo://interchange/entity/specification-decision-v1"
+
+activity ObserveReleasedGoooIdentity(GoooRelease) -> SpecificationDecision
+activity ObserveLinkObservationIdentity(LinkObservation) -> SpecificationDecision
+activity ObservePromotionUnknown(PromotionUnknown) -> SpecificationDecision
+activity DeclareInterchangeAuthority(InterchangeAuthority) -> SpecificationDecision
+activity DefineProjectEnvelope(ProjectEnvelope) -> SpecificationDecision
+activity DefineRelationEnvelope(RelationEnvelope) -> SpecificationDecision
+activity DefineUnknownTuple(UnknownTuple) -> SpecificationDecision
+activity GenerateFiveFileBundles(FiveFileBundleSet) -> SpecificationDecision
+activity ConformSixLocalChecks(SixLocalChecks) -> SpecificationDecision
+activity ObserveNineGoldenFixtures(NineGoldenFixtures) -> SpecificationDecision
+activity ObserveDeterministicReplay(ReplayObservation) -> SpecificationDecision
+activity PreserveZeroExternalGates(ExternalGateCount) -> SpecificationDecision

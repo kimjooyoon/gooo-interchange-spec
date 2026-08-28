@@ -1,0 +1,12 @@
+{
+  "schema": "gooo/interchange/link-observation-release-lock/v1",
+  "repository": "kimjooyoon/gooo-link",
+  "tag": "v0.4.0-dev",
+  "version": "0.4.0-dev",
+  "tag_object_sha": "6c65882e4b96820fbbd3014ec901e8e86e803292",
+  "target_commit_sha": "4ad0f09dee05300ba6e5de61c0f75f436d580440",
+  "asset": {
+    "name": "three-domain-observation.json",
+    "sha256": "b2798697a023db815f04cc8e4b263a8f1759644ddba3010683f2352233dda7d7"
+  }
+}

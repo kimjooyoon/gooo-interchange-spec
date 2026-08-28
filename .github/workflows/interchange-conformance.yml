@@ -1,0 +1,145 @@
+name: Interchange specification conformance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SUBJECT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SUBJECT_SHA }}
+      - name: Bind exact subject identity
+        run: test "$(git rev-parse HEAD)" = "$SUBJECT_SHA"
+      - name: Download immutable Gooo and link observation releases
+        run: |
+          set -euo pipefail
+          verify_release() {
+            lock=$1; prefix=$2
+            repository=$(jq -r .repository "$lock"); tag=$(jq -r .tag "$lock"); tag_object=$(jq -r .tag_object_sha "$lock"); target=$(jq -r .target_commit_sha "$lock")
+            gh api "repos/$repository/git/ref/tags/$tag" > "$RUNNER_TEMP/$prefix-ref.json"
+            jq -e --arg sha "$tag_object" '.object.type=="tag" and .object.sha==$sha' "$RUNNER_TEMP/$prefix-ref.json" >/dev/null
+            gh api "repos/$repository/git/tags/$tag_object" > "$RUNNER_TEMP/$prefix-tag.json"
+            jq -e --arg sha "$target" '.object.type=="commit" and .object.sha==$sha' "$RUNNER_TEMP/$prefix-tag.json" >/dev/null
+            gh api "repos/$repository/releases/tags/$tag" > "$RUNNER_TEMP/$prefix-release.json"
+          }
+          core_lock=contracts/core-release-lock-v1.json
+          link_lock=contracts/link-observation-release-lock-v1.json
+          verify_release "$core_lock" core
+          verify_release "$link_lock" link
+          core_asset=$(jq -r .asset.name "$core_lock"); core_id=$(jq -r --arg name "$core_asset" '.assets[]|select(.name==$name)|.id' "$RUNNER_TEMP/core-release.json")
+          gh api -H 'Accept: application/octet-stream' "repos/$(jq -r .repository "$core_lock")/releases/assets/$core_id" > "$RUNNER_TEMP/$core_asset"
+          test "$(sha256sum "$RUNNER_TEMP/$core_asset"|awk '{print $1}')" = "$(jq -r .asset.sha256 "$core_lock")"
+          mkdir -p "$RUNNER_TEMP/core"; tar -xzf "$RUNNER_TEMP/$core_asset" -C "$RUNNER_TEMP/core"
+          link_asset=$(jq -r .asset.name "$link_lock"); link_id=$(jq -r --arg name "$link_asset" '.assets[]|select(.name==$name)|.id' "$RUNNER_TEMP/link-release.json")
+          gh api -H 'Accept: application/octet-stream' "repos/$(jq -r .repository "$link_lock")/releases/assets/$link_id" > "$RUNNER_TEMP/link-observation.json"
+          test "$(sha256sum "$RUNNER_TEMP/link-observation.json"|awk '{print $1}')" = "$(jq -r .asset.sha256 "$link_lock")"
+          jq -S -n --arg tag "$(jq -r .tag "$link_lock")" --arg tag_object_sha "$(jq -r .tag_object_sha "$link_lock")" --arg target_commit_sha "$(jq -r .target_commit_sha "$link_lock")" '{schema:"gooo/interchange/link-release-observation/v1",tag:$tag,tag_object_sha:$tag_object_sha,target_commit_sha:$target_commit_sha,identity_verified:true,asset_verified:true}' > "$RUNNER_TEMP/link-release-observation.json"
+          jq -e '.decision=="INCOMPLETE" and .promotion.state=="UNKNOWN" and .promotion.machine_readable_replay=={observed:2,required:3} and .promotion.canonical_envelope_adoption=={observed:0,required:3}' "$RUNNER_TEMP/link-observation.json" >/dev/null
+      - name: Resolve Gooo interchange meta activities
+        run: |
+          set -euo pipefail
+          gooo="$RUNNER_TEMP/core/gooo"; source=examples/interchange/main.gooo; denominator=contracts/interchange-denominator-v1.json
+          "$gooo" check --json "$source" > "$RUNNER_TEMP/syntax.json"
+          "$gooo" check --semantic --json "$source" > "$RUNNER_TEMP/semantic.json"
+          "$gooo" graph dump "$source" > "$RUNNER_TEMP/graph.json"
+          jq -e '.status=="ok"' "$RUNNER_TEMP/syntax.json" "$RUNNER_TEMP/semantic.json" >/dev/null
+          mkdir -p "$RUNNER_TEMP/core-resolutions"
+          while IFS=$'\t' read -r ordinal activity; do
+            printf -v receipt '%s/core-resolutions/%02d-%s.json' "$RUNNER_TEMP" "$ordinal" "$activity"
+            "$gooo" graph resolve-activity "$source" --name "$activity" > "$receipt"
+            jq -e --arg activity "$activity" '.schema=="gooo/activity-cardinality-resolution/v1" and .selector.name==$activity and .decision=="CLOSED" and .occurrences==1 and .claim.state=="CLOSED" and .claim.reason=="ACTIVITY_UNIQUELY_RESOLVED"' "$receipt" >/dev/null
+          done < <(jq -r '.cells[]|[.ordinal,.activity]|@tsv' "$denominator")
+          jq -S -s '.' "$RUNNER_TEMP"/core-resolutions/*.json > "$RUNNER_TEMP/core-receipts.json"
+          jq -S -n --slurpfile lock contracts/core-release-lock-v1.json --slurpfile receipts "$RUNNER_TEMP/core-receipts.json" '
+            ($receipts[0]) as $r|{schema:"gooo/interchange/core-resolution-observation/v1",core_release:{repository:$lock[0].repository,tag:$lock[0].tag,tag_object_sha:$lock[0].tag_object_sha,target_commit_sha:$lock[0].target_commit_sha,binary_asset:$lock[0].asset.name,binary_sha256:$lock[0].asset.sha256,resolution_schema:$lock[0].resolution_schema},summary:{expected:12,observed:($r|length),closed:([$r[]|select(.decision=="CLOSED")]|length),unknown:([$r[]|select(.decision=="UNKNOWN")]|length),refuted:([$r[]|select(.decision=="REFUTED")]|length)},receipts:$r}' > "$RUNNER_TEMP/core-resolution-observation.json"
+      - name: Generate and conform nine golden bundles
+        run: |
+          set -euxo pipefail
+          snapshot() { find "$GITHUB_WORKSPACE" -path "$GITHUB_WORKSPACE/.git" -prune -o -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}'; }
+          before=$(snapshot); matrix=fixtures/golden-v1.json; mkdir -p "$RUNNER_TEMP/bundles" "$RUNNER_TEMP/replays" "$RUNNER_TEMP/reports"
+          first=$(jq -r '.fixtures[0].id' "$matrix")
+          start_ns=$(date +%s%N)
+          /usr/bin/time -f '%M' -o "$RUNNER_TEMP/generator-rss" bash scripts/generate-bundle.sh "$GITHUB_WORKSPACE" "$matrix" "$first" "$RUNNER_TEMP/bundles/$first"
+          end_ns=$(date +%s%N); echo $(( (end_ns-start_ns)/1000000 )) > "$RUNNER_TEMP/generator-wall-ms"
+          bash scripts/generate-bundle.sh "$GITHUB_WORKSPACE" "$matrix" "$first" "$RUNNER_TEMP/replays/$first"
+          bash scripts/conform-bundle.sh "$RUNNER_TEMP/bundles/$first" "$RUNNER_TEMP/replays/$first" "$RUNNER_TEMP/reports/$first.json"
+          while IFS= read -r id; do
+            test "$id" = "$first" && continue
+            bash scripts/generate-bundle.sh "$GITHUB_WORKSPACE" "$matrix" "$id" "$RUNNER_TEMP/bundles/$id"
+            bash scripts/generate-bundle.sh "$GITHUB_WORKSPACE" "$matrix" "$id" "$RUNNER_TEMP/replays/$id"
+            bash scripts/conform-bundle.sh "$RUNNER_TEMP/bundles/$id" "$RUNNER_TEMP/replays/$id" "$RUNNER_TEMP/reports/$id.json"
+          done < <(jq -r '.fixtures[].id' "$matrix")
+          jq -S -s '.' "$RUNNER_TEMP"/reports/*.json > "$RUNNER_TEMP/report-array.json"
+          jq -S -n --slurpfile matrix "$matrix" --slurpfile reports "$RUNNER_TEMP/report-array.json" '
+            ($matrix[0].fixtures) as $fixtures|($reports[0]) as $r|
+            {schema:"gooo/interchange/golden-conformance-matrix/v1",fixtures:($fixtures|length),domains:([$fixtures[].domain]|unique|length),states:{MATCH:([$fixtures[]|select(.relation.state=="MATCH")]|length),MISMATCH:([$fixtures[]|select(.relation.state=="MISMATCH")]|length),UNKNOWN:([$fixtures[]|select(.relation.state=="UNKNOWN")]|length)},
+             bundles:($r|length),generated_files:([range(0;($r|length))|5]|add),project_files:($r|length),relation_rows:($r|length),relation_anchors:($r|length),unknown_rows:([$fixtures[]|select(.relation.state=="UNKNOWN")]|length),
+             unknown_tuples:([$fixtures[]|select(.relation.state=="UNKNOWN" and (.relation|has("stage") and has("step") and has("reason") and has("unknown_class") and has("next_operation")))]|length),
+           local_checks_closed:([$r[].summary.closed]|add),local_checks_total:([$r[].summary.total]|add),replays_closed:([$r[]|select(.checks[]|select(.id=="DETERMINISTIC_REPLAY" and .state=="CLOSED"))]|length),replays_total:($r|length),external_required_gates:([$r[].summary.external_required_gates]|add),schema_files:4,
+           refuted_checks:([$r[]|.checks[]|select(.state=="REFUTED")|{id,reason}]),authority:{source:"GOLDEN_FIXTURES",domain_release_adoption:"NOT_CLAIMED",cross_project_required_gates:0}}' > "$RUNNER_TEMP/aggregate.json"
+          jq . "$RUNNER_TEMP/aggregate.json"
+          jq -e '.fixtures==9 and .domains==3 and .states=={MATCH:3,MISMATCH:3,UNKNOWN:3} and .bundles==9 and .generated_files==45 and .local_checks_closed==54 and .local_checks_total==54 and .unknown_tuples==3 and .replays_closed==9 and .external_required_gates==0' "$RUNNER_TEMP/aggregate.json" >/dev/null
+          cp -R "$RUNNER_TEMP/bundles/$first" "$RUNNER_TEMP/bad-checksum"; cp -R "$RUNNER_TEMP/bundles/$first" "$RUNNER_TEMP/bad-checksum-replay"
+          printf '\n' >> "$RUNNER_TEMP/bad-checksum/project.json"; printf '\n' >> "$RUNNER_TEMP/bad-checksum-replay/project.json"
+          bash scripts/conform-bundle.sh "$RUNNER_TEMP/bad-checksum" "$RUNNER_TEMP/bad-checksum-replay" "$RUNNER_TEMP/checksum-mismatch.json"
+          jq -e '.decision=="FAIL_CLOSED" and .summary.closed==5 and .summary.refuted==1 and .claim.stage=="DIGEST" and .claim.reason=="SHA256_CHECKSUM_MISMATCH"' "$RUNNER_TEMP/checksum-mismatch.json" >/dev/null
+          jq 'del(.fixtures[]|select(.id=="local-ledger-unknown")|.relation.next_operation)' "$matrix" > "$RUNNER_TEMP/invalid-unknown-matrix.json"
+          set +e; bash scripts/generate-bundle.sh "$GITHUB_WORKSPACE" "$RUNNER_TEMP/invalid-unknown-matrix.json" local-ledger-unknown "$RUNNER_TEMP/invalid-unknown-bundle"; invalid_status=$?; set -e
+          test "$invalid_status" -ne 0
+          jq -S -n --argjson status "$invalid_status" '{schema:"gooo/interchange/invalid-unknown-receipt/v1",decision:"FAIL_CLOSED",exit_status:$status,claim:{state:"REFUTED",stage:"UNCERTAINTY",step:"VALIDATE_UNKNOWN_TUPLE",reason:"UNKNOWN_NEXT_OPERATION_UNAVAILABLE",next_operation:"PROVIDE_UNKNOWN_NEXT_OPERATION",unknown_class:null}}' > "$RUNNER_TEMP/invalid-unknown.json"
+          after=$(snapshot); if test "$before" = "$after"; then writes=0; else writes=1; fi
+          jq -S -n --arg subject_sha "$SUBJECT_SHA" --arg before "$before" --arg after "$after" --argjson writes "$writes" --argjson peak_rss_kib "$(cat "$RUNNER_TEMP/generator-rss")" --argjson wall_ms "$(cat "$RUNNER_TEMP/generator-wall-ms")" '{schema:"gooo/interchange/runtime/v1",subject_sha:$subject_sha,generator:{peak_rss_kib:$peak_rss_kib,wall_ms:$wall_ms},repository:{before_digest:$before,after_digest:$after,writes:$writes},deterministic_replay:true,local_tests_run:0}' > "$RUNNER_TEMP/runtime.json"
+      - name: Evaluate specification through Gooo meta cells
+        run: |
+          set -euo pipefail
+          evaluator=scripts/evaluate-interchange.sh
+          args=("$RUNNER_TEMP/graph.json" "$RUNNER_TEMP/core-resolution-observation.json" contracts/interchange-denominator-v1.json contracts/core-release-lock-v1.json contracts/link-observation-release-lock-v1.json "$RUNNER_TEMP/link-release-observation.json" "$RUNNER_TEMP/link-observation.json" "$RUNNER_TEMP/aggregate.json" "$RUNNER_TEMP/runtime.json")
+          bash "$evaluator" "${args[@]}" "$RUNNER_TEMP/specification-report.json" released-observation
+          bash "$evaluator" "${args[@]}" "$RUNNER_TEMP/specification-replay.json" released-observation
+          cmp -s "$RUNNER_TEMP/specification-report.json" "$RUNNER_TEMP/specification-replay.json"
+          jq -e '.decision=="SPECIFICATION_CONFORMANT" and .summary=={total:12,closed:12,unknown:0,refuted:0,domains:3,fixtures:9,bundles:9,generated_files:45,local_checks_closed:54,local_checks_total:54} and
+            .adoption.specification_fixture_conformance=={observed:9,total:9} and .adoption.released_domain_adoption=={observed:0,total:3} and .adoption.connector_implementation=="NOT_STARTED" and
+            all(.proofs[];.closed==.total) and all(.indicator_classes[];.closed==.total)' "$RUNNER_TEMP/specification-report.json" >/dev/null
+          jq '.receipts[0].decision="FIXED_POINT"' "$RUNNER_TEMP/core-resolution-observation.json" > "$RUNNER_TEMP/invalid-core.json"
+          bad_args=("$RUNNER_TEMP/graph.json" "$RUNNER_TEMP/invalid-core.json" contracts/interchange-denominator-v1.json contracts/core-release-lock-v1.json contracts/link-observation-release-lock-v1.json "$RUNNER_TEMP/link-release-observation.json" "$RUNNER_TEMP/link-observation.json" "$RUNNER_TEMP/aggregate.json" "$RUNNER_TEMP/runtime.json")
+          bash "$evaluator" "${bad_args[@]}" "$RUNNER_TEMP/invalid-core-decision.json" invalid-core-decision
+          jq -e '.decision=="FAIL_CLOSED" and .summary.closed==0 and .summary.refuted==12 and .claim.stage=="RESOLUTION" and .claim.reason=="UNRECOGNIZED_CORE_ACTIVITY_RESOLUTION_DECISION"' "$RUNNER_TEMP/invalid-core-decision.json" >/dev/null
+      - name: Publish exact human-readable contract
+        run: |
+          {
+            echo '## Gooo interchange specification'
+            echo
+            jq -r '"- decision: \(.decision)","- meta cells: \(.summary.closed)/\(.summary.total) CLOSED","- domains: \(.summary.domains)/3","- golden fixtures: \(.summary.fixtures)/9","- generated bundles: \(.summary.bundles)/9","- generated required files: \(.summary.generated_files)/45","- local conformance checks: \(.summary.local_checks_closed)/\(.summary.local_checks_total)","- required files per bundle: \(.contract.required_files_per_bundle)","- required local checks per bundle: \(.contract.required_local_checks_per_bundle)","- external required gates: \(.contract.external_required_gates)","- released domain adoption: \(.adoption.released_domain_adoption.observed)/\(.adoption.released_domain_adoption.total)","- connector implementation: \(.adoption.connector_implementation)","- domain adoption claim: \(.authority.domain_release_adoption)"' "$RUNNER_TEMP/specification-report.json"
+            jq -r '"- checksum counterexample: \(.summary.closed)/\(.summary.total) checks CLOSED; REFUTED \(.summary.refuted); \(.claim.reason)"' "$RUNNER_TEMP/checksum-mismatch.json"
+            jq -r '"- invalid UNKNOWN tuple: \(.decision); \(.claim.stage) / \(.claim.step) / \(.claim.reason)"' "$RUNNER_TEMP/invalid-unknown.json"
+            jq -r '"- generator peak RSS: \(.generator.peak_rss_kib) KiB","- generator wall time: \(.generator.wall_ms) ms","- repository writes: \(.repository.writes)","- deterministic replay: \(.deterministic_replay)","- local test executions: \(.local_tests_run)"' "$RUNNER_TEMP/runtime.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Enforce zero repository writes
+        run: test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: interchange-spec-${{ env.SUBJECT_SHA }}
+          if-no-files-found: warn
+          path: |
+            ${{ runner.temp }}/specification-report.json
+            ${{ runner.temp }}/specification-replay.json
+            ${{ runner.temp }}/aggregate.json
+            ${{ runner.temp }}/runtime.json
+            ${{ runner.temp }}/checksum-mismatch.json
+            ${{ runner.temp }}/invalid-unknown.json
+            ${{ runner.temp }}/invalid-core-decision.json
+            ${{ runner.temp }}/link-observation.json
+            ${{ runner.temp }}/core-resolution-observation.json
+            ${{ runner.temp }}/bundles
