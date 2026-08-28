@@ -23,7 +23,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$SUBJECT_SHA"
       - name: Download immutable Gooo and link observation releases
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           verify_release() {
             lock=$1; prefix=$2
             repository=$(jq -r .repository "$lock"); tag=$(jq -r .tag "$lock"); tag_object=$(jq -r .tag_object_sha "$lock"); target=$(jq -r .target_commit_sha "$lock")
