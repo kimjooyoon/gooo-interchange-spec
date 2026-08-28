@@ -26,7 +26,7 @@ if jq -s -e 'length==1 and .[0].schema=="gooo/interchange/relation/v1" and (.[]|
 else append_check RELATION_ANCHORS RELATION VERIFY_RELATION_ANCHORS REFUTED RELATION_ANCHOR_MISMATCH RESTORE_RELATION_ANCHORS; fi
 if jq -s -e --slurpfile project "$bundle/project.json" --slurpfile unknowns "$bundle/unknowns.ndjson" '
   ([.[]|select(.state=="UNKNOWN")]) as $relations_unknown |
-  ($unknowns[0]//[]) as $unknown_rows |
+  $unknowns as $unknown_rows |
   ($relations_unknown|length)==$project[0].unknown_count and ($unknown_rows|length)==$project[0].unknown_count and
   all($relations_unknown[];has("stage") and has("step") and has("reason") and has("unknown_class") and has("next_operation") and (.unknown_class|type)=="string" and .next_operation!="NONE") and
   ($relations_unknown==$unknown_rows)
