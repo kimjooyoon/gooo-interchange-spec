@@ -1,0 +1,34 @@
+{
+  "schema": "gooo/interchange/released-domain-consumer-kit-release-lock/v2",
+  "specification": {
+    "repository": "kimjooyoon/gooo-interchange-spec",
+    "tag": "v0.2.0-dev",
+    "release_id": 378629323,
+    "ref_object_type": "commit",
+    "ref_object_sha": "16d9fc42ae8ea8ac4da2d729f1e6d6a86788027d",
+    "target_commit_sha": "16d9fc42ae8ea8ac4da2d729f1e6d6a86788027d",
+    "assets": [
+      {
+        "role": "report",
+        "id": 534083787,
+        "name": "released-domain-envelope-v2-report.json",
+        "size": 12441,
+        "sha256": "47f5ca9b1c23336512dd6ddf862e7fd1e6541245b1d1f5122fe7cb38aea2d6dc"
+      },
+      {
+        "role": "aggregate",
+        "id": 534083767,
+        "name": "released-domain-envelope-v2-aggregate.json",
+        "size": 459,
+        "sha256": "1f5f4d421cd3ac6dfb922b19429d4cc6efc85502357d339a4a24b274280092e0"
+      },
+      {
+        "role": "ci_artifact",
+        "id": 534083765,
+        "name": "released-domain-envelope-v2-ci-artifact.zip",
+        "size": 37715,
+        "sha256": "e625182452d080c18c21c9322bd7ac4dab55719a99c5f98f2b92899263425adc"
+      }
+    ]
+  }
+}

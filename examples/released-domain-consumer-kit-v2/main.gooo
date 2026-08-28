@@ -1,0 +1,29 @@
+package interchange
+namespace interchange
+
+entity SpecificationRelease id "gooo://interchange/entity/specification-release-v2"
+entity ProjectionEvidence id "gooo://interchange/entity/released-projection-evidence-v2"
+entity EnvelopeSchemas id "gooo://interchange/entity/six-envelope-schemas-v2"
+entity ReadOnlyConformer id "gooo://interchange/entity/read-only-conformer-v2"
+entity ConsumerKit id "gooo://interchange/entity/eleven-file-consumer-kit-v2"
+entity InternalChecksums id "gooo://interchange/entity/internal-checksums-v2"
+entity ReleasedEnvelopes id "gooo://interchange/entity/three-released-envelopes-v2"
+entity DeterministicArchive id "gooo://interchange/entity/deterministic-archive-v2"
+entity UnknownCoordinates id "gooo://interchange/entity/unknown-coordinates-v2"
+entity ProductGenerator id "gooo://interchange/entity/product-generator-v2"
+entity ReadOnlyAuthority id "gooo://interchange/entity/read-only-authority-v2"
+entity IndependentConsumption id "gooo://interchange/entity/independent-consumption-v2"
+entity ConsumerKitDecision id "gooo://interchange/entity/consumer-kit-decision-v2"
+
+activity ObserveReleasedSpecification(SpecificationRelease) -> ConsumerKitDecision
+activity ObserveReleasedProjectionEvidence(ProjectionEvidence) -> ConsumerKitDecision
+activity BindSixEnvelopeSchemas(EnvelopeSchemas) -> ConsumerKitDecision
+activity BindReadOnlyConformer(ReadOnlyConformer) -> ConsumerKitDecision
+activity AssembleElevenFileKit(ConsumerKit) -> ConsumerKitDecision
+activity VerifyInternalChecksums(InternalChecksums) -> ConsumerKitDecision
+activity ConformThreeReleasedEnvelopes(ReleasedEnvelopes) -> ConsumerKitDecision
+activity VerifyDeterministicArchive(DeterministicArchive) -> ConsumerKitDecision
+activity PreserveSixUnknownCoordinatesInKit(UnknownCoordinates) -> ConsumerKitDecision
+activity ExcludeProductGenerator(ProductGenerator) -> ConsumerKitDecision
+activity RejectAuthorityEscalation(ReadOnlyAuthority) -> ConsumerKitDecision
+activity PreserveIndependentConsumption(IndependentConsumption) -> ConsumerKitDecision
