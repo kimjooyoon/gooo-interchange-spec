@@ -205,7 +205,7 @@ jobs:
           jq '.available=false|.verified=false|.assets_verified=0' "$RUNNER_TEMP/release-observation.json" > "$RUNNER_TEMP/missing-release-observation.json"
           evaluate "$RUNNER_TEMP/core-resolution-observation.json" "$RUNNER_TEMP/missing-release-observation.json" "$RUNNER_TEMP/kit-observation.json" "$RUNNER_TEMP/runtime.json" "$RUNNER_TEMP/missing-release.json" missing-release
           jq -e '.decision=="INCOMPLETE" and .summary.closed_cells==0 and .summary.unknown_cells==12 and
-            .cells[0].unknown_class=="DIRECT_MISSING" and all(.cells[1:];.unknown_class=="DEPENDENCY_BLOCKED")' "$RUNNER_TEMP/missing-release.json" >/dev/null
+            .cells[0].unknown_class=="DIRECT_MISSING" and all(.cells[1:][];.unknown_class=="DEPENDENCY_BLOCKED")' "$RUNNER_TEMP/missing-release.json" >/dev/null
 
           jq '.files=12|.generators=1' "$RUNNER_TEMP/kit-observation.json" > "$RUNNER_TEMP/generator-kit.json"
           evaluate "$RUNNER_TEMP/core-resolution-observation.json" "$RUNNER_TEMP/release-observation.json" "$RUNNER_TEMP/generator-kit.json" "$RUNNER_TEMP/runtime.json" "$RUNNER_TEMP/generator-refuted.json" generator-included
