@@ -1,0 +1,266 @@
+name: Released-domain consumer kit v2
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SUBJECT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SUBJECT_SHA }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.x'
+      - name: Bind exact subject and Go 1.27
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SUBJECT_SHA"
+          go version | grep -E 'go1\.27\.'
+      - name: Download immutable specification and Core releases
+        run: |
+          set -euo pipefail
+          lock=contracts/released-domain-consumer-kit-release-lock-v2.json
+          spec=$(jq -c .specification "$lock")
+          repository=$(jq -r .repository <<<"$spec")
+          tag=$(jq -r .tag <<<"$spec")
+          release_id=$(jq -r .release_id <<<"$spec")
+          target=$(jq -r .target_commit_sha <<<"$spec")
+          gh api "repos/$repository/git/ref/tags/$tag" > "$RUNNER_TEMP/spec-ref.json"
+          jq -e --arg target "$target" '.object.type=="commit" and .object.sha==$target' "$RUNNER_TEMP/spec-ref.json" >/dev/null
+          gh api "repos/$repository/releases/$release_id" > "$RUNNER_TEMP/spec-release.json"
+          jq -e --arg tag "$tag" --arg target "$target" '.tag_name==$tag and .target_commitish==$target' "$RUNNER_TEMP/spec-release.json" >/dev/null
+          for role in report aggregate ci_artifact; do
+            asset=$(jq -c --arg role "$role" '.assets[]|select(.role==$role)' <<<"$spec")
+            id=$(jq -r .id <<<"$asset")
+            name=$(jq -r .name <<<"$asset")
+            size=$(jq -r .size <<<"$asset")
+            digest=$(jq -r .sha256 <<<"$asset")
+            jq -e --argjson id "$id" --arg name "$name" --argjson size "$size" '.assets[]|select(.id==$id and .name==$name and .size==$size)' "$RUNNER_TEMP/spec-release.json" >/dev/null
+            gh api -H 'Accept: application/octet-stream' "repos/$repository/releases/assets/$id" > "$RUNNER_TEMP/$role"
+            test "$(stat -c %s "$RUNNER_TEMP/$role")" = "$size"
+            test "$(sha256sum "$RUNNER_TEMP/$role"|awk '{print $1}')" = "$digest"
+          done
+          jq -e '.decision=="SPECIFICATION_PROJECTION_CONFORMANT" and .summary.total_cells==12 and .summary.closed_cells==12 and .summary.valid_unknown_cases==1' "$RUNNER_TEMP/report" >/dev/null
+          jq -e '.products==3 and .envelopes==3 and .local_checks_closed==30 and .local_checks_total==30' "$RUNNER_TEMP/aggregate" >/dev/null
+          unzip -q "$RUNNER_TEMP/ci_artifact" -d "$RUNNER_TEMP/spec-artifact"
+
+          core_lock=contracts/released-domain-envelope-release-lock-v2.json
+          core=$(jq -c .core "$core_lock")
+          core_repository=$(jq -r .repository <<<"$core")
+          core_tag=$(jq -r .tag <<<"$core")
+          core_target=$(jq -r .target_commit_sha <<<"$core")
+          gh api "repos/$core_repository/git/ref/tags/$core_tag" > "$RUNNER_TEMP/core-ref.json"
+          jq -e --arg target "$core_target" '.object.type=="commit" and .object.sha==$target' "$RUNNER_TEMP/core-ref.json" >/dev/null
+          gh api "repos/$core_repository/releases/tags/$core_tag" > "$RUNNER_TEMP/core-release.json"
+          binary=$(jq -c '.assets[]|select(.role=="binary")' <<<"$core")
+          binary_name=$(jq -r .name <<<"$binary")
+          binary_digest=$(jq -r .sha256 <<<"$binary")
+          binary_size=$(jq -r .size <<<"$binary")
+          binary_id=$(jq -r --arg name "$binary_name" '.assets[]|select(.name==$name)|.id' "$RUNNER_TEMP/core-release.json")
+          gh api -H 'Accept: application/octet-stream' "repos/$core_repository/releases/assets/$binary_id" > "$RUNNER_TEMP/core.tar.gz"
+          test "$(stat -c %s "$RUNNER_TEMP/core.tar.gz")" = "$binary_size"
+          test "$(sha256sum "$RUNNER_TEMP/core.tar.gz"|awk '{print $1}')" = "$binary_digest"
+          mkdir "$RUNNER_TEMP/core"
+          tar -xzf "$RUNNER_TEMP/core.tar.gz" -C "$RUNNER_TEMP/core"
+
+          jq -S -n --arg target "$target" '{
+            schema:"gooo/interchange/released-domain-consumer-kit-release-observation/v2",
+            available:true,verified:true,assets_verified:3,target_commit_sha:$target,
+            report_decision:"SPECIFICATION_PROJECTION_CONFORMANT",report_cells:12
+          }' > "$RUNNER_TEMP/release-observation.json"
+      - name: Resolve twelve Gooo meta activities
+        run: |
+          set -euo pipefail
+          gooo="$RUNNER_TEMP/core/gooo"
+          source=examples/released-domain-consumer-kit-v2/main.gooo
+          denominator=contracts/released-domain-consumer-kit-denominator-v2.json
+          if ! "$gooo" check --json "$source" > "$RUNNER_TEMP/syntax.json"; then jq . "$RUNNER_TEMP/syntax.json"; exit 1; fi
+          if ! "$gooo" check --semantic --json "$source" > "$RUNNER_TEMP/semantic.json"; then jq . "$RUNNER_TEMP/semantic.json"; exit 1; fi
+          if ! "$gooo" graph dump "$source" > "$RUNNER_TEMP/graph.json"; then cat "$RUNNER_TEMP/graph.json"; exit 1; fi
+          jq -e '.status=="ok"' "$RUNNER_TEMP/syntax.json" "$RUNNER_TEMP/semantic.json" >/dev/null
+          mkdir "$RUNNER_TEMP/core-resolutions"
+          while IFS=$'\t' read -r ordinal activity; do
+            receipt="$RUNNER_TEMP/core-resolutions/$ordinal-$activity.json"
+            if ! "$gooo" graph resolve-activity "$source" --name "$activity" > "$receipt"; then jq . "$receipt"; exit 1; fi
+            jq -e --arg activity "$activity" '.schema=="gooo/activity-cardinality-resolution/v1" and .selector.name==$activity and .decision=="CLOSED" and .occurrences==1 and .claim.state=="CLOSED" and .claim.reason=="ACTIVITY_UNIQUELY_RESOLVED"' "$receipt" >/dev/null
+          done < <(jq -r '.cells[]|[.ordinal,.activity]|@tsv' "$denominator")
+          jq -S -s '.' "$RUNNER_TEMP"/core-resolutions/*.json > "$RUNNER_TEMP/core-receipts.json"
+          jq -S -n --slurpfile receipts "$RUNNER_TEMP/core-receipts.json" '{
+            schema:"gooo/interchange/consumer-kit-core-resolution-observation/v2",
+            summary:{expected:12,observed:($receipts[0]|length),closed:([$receipts[0][]|select(.decision=="CLOSED")]|length),unknown:0,refuted:0},
+            receipts:$receipts[0]
+          }' > "$RUNNER_TEMP/core-resolution-observation.json"
+      - name: Package twice and re-conform three released envelopes
+        run: |
+          set -euo pipefail
+          snapshot() {
+            find "$GITHUB_WORKSPACE" -path "$GITHUB_WORKSPACE/.git" -prune -o -type f -print0 |
+              sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}'
+          }
+          before=$(snapshot)
+          start_ns=$(date +%s%N)
+          /usr/bin/time -f '%M' -o "$RUNNER_TEMP/rss" bash scripts/package-released-domain-consumer-kit-v2.sh "$GITHUB_WORKSPACE" "$RUNNER_TEMP/package-a"
+          bash scripts/package-released-domain-consumer-kit-v2.sh "$GITHUB_WORKSPACE" "$RUNNER_TEMP/package-b"
+          cmp -s "$RUNNER_TEMP/package-a/gooo-interchange-consumer-kit-v2.tar.gz" "$RUNNER_TEMP/package-b/gooo-interchange-consumer-kit-v2.tar.gz"
+          kit="$RUNNER_TEMP/package-a/consumer-kit-v2"
+          test "$(find "$kit" -type f | wc -l | tr -d ' ')" = 11
+          test "$(find "$kit/schemas" -type f -name '*-v2.schema.json' | wc -l | tr -d ' ')" = 6
+          test "$(find "$kit" -type f -iname '*generate*' | wc -l | tr -d ' ')" = 0
+          checksum_entries=$(wc -l < "$kit/SHA256SUMS" | tr -d ' ')
+          test "$checksum_entries" = 10
+          (cd "$kit" && sha256sum -c SHA256SUMS >/dev/null)
+          jq -e '.inventory=={files:11,checksum_entries:10,schemas:6,conformers:1,generators:0,denominators:1,documents:1} and .authority=={read_only:true,product_generation_authorized:false,repository_checkout_required:false,cross_project_required_gates:0}' "$kit/manifest.json" >/dev/null
+
+          mkdir "$RUNNER_TEMP/consumer-reports"
+          for id in local-ledger design-evidence infra-evidence; do
+            bundle="$RUNNER_TEMP/spec-artifact/bundles/$id"
+            test -d "$bundle"
+            bash "$kit/scripts/conform-released-envelope-v2.sh" "$bundle" "$bundle" "$RUNNER_TEMP/consumer-reports/$id.json"
+            jq -e '.decision=="CONFORMANT" and .summary.closed==10 and .summary.total==10' "$RUNNER_TEMP/consumer-reports/$id.json" >/dev/null
+          done
+          jq -S -s '{
+            schema:"gooo/interchange/consumer-kit-envelope-observation/v2",
+            envelopes:length,
+            checks_closed:([.[].summary.closed]|add),
+            checks_total:([.[].summary.total]|add),
+            valid_unknown_cases:1,
+            unknown_coordinate_fields:6
+          }' "$RUNNER_TEMP"/consumer-reports/*.json > "$RUNNER_TEMP/envelope-observation.json"
+          jq -e '.claim.state=="UNKNOWN" and
+            (.claim|has("stage") and has("step") and has("reason") and has("unknown_class") and has("next_operation") and has("blocked_by"))' \
+            "$RUNNER_TEMP/spec-artifact/valid-unknown-report.json" >/dev/null
+
+          archive_a=$(sha256sum "$RUNNER_TEMP/package-a/gooo-interchange-consumer-kit-v2.tar.gz"|awk '{print $1}')
+          archive_b=$(sha256sum "$RUNNER_TEMP/package-b/gooo-interchange-consumer-kit-v2.tar.gz"|awk '{print $1}')
+          jq -S -n --arg archive "$archive_a" '{
+            schema:"gooo/interchange/released-domain-consumer-kit-observation/v2",
+            files:11,schemas:6,conformers:1,generators:0,checksum_entries:10,checksums_verified:10,
+            archive_replays:1,archive_replays_equal:1,archive_sha256:$archive,
+            read_only:true,repository_checkout_required:false
+          }' > "$RUNNER_TEMP/kit-observation.json"
+          test "$archive_a" = "$archive_b"
+          end_ns=$(date +%s%N)
+          wall_ms=$(( (end_ns-start_ns)/1000000 ))
+          peak_rss_kib=$(cat "$RUNNER_TEMP/rss")
+          test "$wall_ms" -le 30000
+          test "$peak_rss_kib" -le 131072
+          after=$(snapshot)
+          test "$before" = "$after"
+
+          repository_files=$(find . -type f -not -path './.git/*' -not -path './README.md' | wc -l | tr -d ' ')
+          descendant_directories=$(find . -mindepth 1 -type d -not -path './.git' -not -path './.git/*' | wc -l | tr -d ' ')
+          physical_lines=$(find . -type f -not -path './.git/*' -not -path './README.md' -print0 | xargs -0 wc -l | tail -1 | awk '{print $1}')
+          go_files=$(find . -type f -name '*.go' -not -path './.git/*' | wc -l | tr -d ' ')
+          go_lines=0
+          if test "$go_files" -gt 0; then go_lines=$(find . -type f -name '*.go' -not -path './.git/*' -print0 | xargs -0 wc -l | tail -1 | awk '{print $1}'); fi
+          gooo_files=$(find . -type f -name '*.gooo' -not -path './.git/*' | wc -l | tr -d ' ')
+          gooo_lines=$(find . -type f -name '*.gooo' -not -path './.git/*' -print0 | xargs -0 wc -l | tail -1 | awk '{print $1}')
+          jq -S -n \
+            --arg subject_sha "$SUBJECT_SHA" \
+            --arg go_version "$(go version|awk '{print $3}')" \
+            --argjson peak_rss_kib "$peak_rss_kib" \
+            --argjson wall_ms "$wall_ms" \
+            --argjson repository_files "$repository_files" \
+            --argjson descendant_directories "$descendant_directories" \
+            --argjson physical_lines "$physical_lines" \
+            --argjson go_files "$go_files" \
+            --argjson go_lines "$go_lines" \
+            --argjson gooo_files "$gooo_files" \
+            --argjson gooo_lines "$gooo_lines" '{
+              schema:"gooo/interchange/released-domain-consumer-kit-runtime/v2",
+              subject_sha:$subject_sha,go_version:$go_version,peak_rss_kib:$peak_rss_kib,wall_ms:$wall_ms,
+              inventory:{repository_files:$repository_files,descendant_directories:$descendant_directories,physical_lines:$physical_lines,
+                go:{files:$go_files,physical_lines:$go_lines},gooo:{files:$gooo_files,physical_lines:$gooo_lines},root_readme_excluded:true},
+              repository_writes:0,local_tests_run:0,go_fix_module_roots:0,cross_project_required_gates:0,
+              product_generation_authorized:false,domain_release_adoption_claimed:false
+            }' > "$RUNNER_TEMP/runtime.json"
+      - name: Evaluate normal, UNKNOWN, and REFUTED decisions through Gooo
+        run: |
+          set -euo pipefail
+          evaluator=scripts/evaluate-released-domain-consumer-kit-v2.sh
+          denominator=contracts/released-domain-consumer-kit-denominator-v2.json
+          evaluate() {
+            bash "$evaluator" "$RUNNER_TEMP/graph.json" "$1" "$denominator" "$2" "$3" "$RUNNER_TEMP/envelope-observation.json" "$4" "$5" "$6"
+          }
+          evaluate "$RUNNER_TEMP/core-resolution-observation.json" "$RUNNER_TEMP/release-observation.json" "$RUNNER_TEMP/kit-observation.json" "$RUNNER_TEMP/runtime.json" "$RUNNER_TEMP/consumer-kit-report.json" normal
+          evaluate "$RUNNER_TEMP/core-resolution-observation.json" "$RUNNER_TEMP/release-observation.json" "$RUNNER_TEMP/kit-observation.json" "$RUNNER_TEMP/runtime.json" "$RUNNER_TEMP/consumer-kit-replay.json" normal
+          cmp -s "$RUNNER_TEMP/consumer-kit-report.json" "$RUNNER_TEMP/consumer-kit-replay.json"
+          jq -e '.decision=="CONSUMER_KIT_CONFORMANT" and
+            .summary=={total_cells:12,closed_cells:12,unknown_cells:0,refuted_cells:0,kit_files:11,schemas:6,conformers:1,generators:0,checksum_entries:10,checksums_verified:10,released_envelopes:3,checks_closed:30,checks_total:30,valid_unknown_cases:1,unknown_coordinate_fields:6} and
+            .adoption.released_domain_adoption=={observed:0,total:3} and .utility=={state:"UNKNOWN",evidence:{observed:0,total:1}} and
+            .improvement=={state:"UNKNOWN",exact_before_after_pairs:{observed:0,total:1}} and
+            all(.proofs[];.closed==.total) and all(.indicator_classes[];.closed==.total)' "$RUNNER_TEMP/consumer-kit-report.json" >/dev/null
+
+          jq '.available=false|.verified=false|.assets_verified=0' "$RUNNER_TEMP/release-observation.json" > "$RUNNER_TEMP/missing-release-observation.json"
+          evaluate "$RUNNER_TEMP/core-resolution-observation.json" "$RUNNER_TEMP/missing-release-observation.json" "$RUNNER_TEMP/kit-observation.json" "$RUNNER_TEMP/runtime.json" "$RUNNER_TEMP/missing-release.json" missing-release
+          jq -e '.decision=="INCOMPLETE" and .summary.closed_cells==0 and .summary.unknown_cells==12 and
+            .cells[0].unknown_class=="DIRECT_MISSING" and all(.cells[1:];.unknown_class=="DEPENDENCY_BLOCKED")' "$RUNNER_TEMP/missing-release.json" >/dev/null
+
+          jq '.files=12|.generators=1' "$RUNNER_TEMP/kit-observation.json" > "$RUNNER_TEMP/generator-kit.json"
+          evaluate "$RUNNER_TEMP/core-resolution-observation.json" "$RUNNER_TEMP/release-observation.json" "$RUNNER_TEMP/generator-kit.json" "$RUNNER_TEMP/runtime.json" "$RUNNER_TEMP/generator-refuted.json" generator-included
+          jq -e '.decision=="FAIL_CLOSED" and .summary.closed_cells==9 and .summary.refuted_cells==3' "$RUNNER_TEMP/generator-refuted.json" >/dev/null
+
+          jq '.repository_writes=1' "$RUNNER_TEMP/runtime.json" > "$RUNNER_TEMP/escalated-runtime.json"
+          evaluate "$RUNNER_TEMP/core-resolution-observation.json" "$RUNNER_TEMP/release-observation.json" "$RUNNER_TEMP/kit-observation.json" "$RUNNER_TEMP/escalated-runtime.json" "$RUNNER_TEMP/authority-refuted.json" authority-escalation
+          jq -e '.decision=="FAIL_CLOSED" and .summary.closed_cells==10 and .summary.refuted_cells==2' "$RUNNER_TEMP/authority-refuted.json" >/dev/null
+
+          jq '.receipts|=map(.decision="FIXED_POINT"|.claim.state="FIXED_POINT")' "$RUNNER_TEMP/core-resolution-observation.json" > "$RUNNER_TEMP/invalid-core.json"
+          evaluate "$RUNNER_TEMP/invalid-core.json" "$RUNNER_TEMP/release-observation.json" "$RUNNER_TEMP/kit-observation.json" "$RUNNER_TEMP/runtime.json" "$RUNNER_TEMP/invalid-core-decision.json" invalid-core-fixed-point
+          jq -e '.decision=="FAIL_CLOSED" and .summary.closed_cells==0 and .summary.refuted_cells==12 and
+            all(.cells[];.reason=="UNRECOGNIZED_CORE_ACTIVITY_RESOLUTION_DECISION")' "$RUNNER_TEMP/invalid-core-decision.json" >/dev/null
+
+          jq -S -n \
+            --slurpfile missing "$RUNNER_TEMP/missing-release.json" \
+            --slurpfile generator "$RUNNER_TEMP/generator-refuted.json" \
+            --slurpfile authority "$RUNNER_TEMP/authority-refuted.json" \
+            --slurpfile core "$RUNNER_TEMP/invalid-core-decision.json" '{
+              schema:"gooo/interchange/released-domain-consumer-kit-counterexamples/v2",
+              total:4,
+              unknown:([$missing[0]|select(.decision=="INCOMPLETE")]|length),
+              fail_closed:([$generator[0],$authority[0],$core[0]|select(.decision=="FAIL_CLOSED")]|length)
+            }' > "$RUNNER_TEMP/counterexamples.json"
+          jq -e '.total==4 and .unknown==1 and .fail_closed==3' "$RUNNER_TEMP/counterexamples.json" >/dev/null
+
+          {
+            echo "## Released-domain consumer kit v2"
+            jq -r '"- decision: \(.decision)","- cells: \(.summary.closed_cells)/\(.summary.total_cells)","- proof choices: "+([.proofs[]|"\(.choice) \(.closed)/\(.total)"]|join(", ")),"- indicators: "+([.indicator_classes[]|"\(.class) \(.closed)/\(.total)"]|join(", ")),"- kit files: \(.summary.kit_files)/11","- schemas: \(.summary.schemas)/6","- read-only conformers: \(.summary.conformers)/1","- generators: \(.summary.generators)","- internal checksums: \(.summary.checksums_verified)/\(.summary.checksum_entries)","- released envelopes: \(.summary.released_envelopes)/3","- envelope checks: \(.summary.checks_closed)/\(.summary.checks_total)","- released adoption: \(.adoption.released_domain_adoption.observed)/\(.adoption.released_domain_adoption.total)","- utility evidence: \(.utility.evidence.observed)/\(.utility.evidence.total) \(.utility.state)","- exact improvement pairs: \(.improvement.exact_before_after_pairs.observed)/\(.improvement.exact_before_after_pairs.total) \(.improvement.state)"' "$RUNNER_TEMP/consumer-kit-report.json"
+            jq -r '"- peak RSS: \(.peak_rss_kib) KiB","- wall time: \(.wall_ms) ms","- Go: \(.inventory.go.files) files / \(.inventory.go.physical_lines) lines","- Gooo: \(.inventory.gooo.files) files / \(.inventory.gooo.physical_lines) lines","- repository files: \(.inventory.repository_files)","- descendant directories: \(.inventory.descendant_directories)","- physical lines: \(.inventory.physical_lines)","- root README: excluded","- repository writes: \(.repository_writes)","- local tests: \(.local_tests_run)","- cross-project required gates: \(.cross_project_required_gates)","- Go version: \(.go_version)"' "$RUNNER_TEMP/runtime.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Enforce zero source writes
+        run: test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: released-domain-consumer-kit-v2-${{ env.SUBJECT_SHA }}
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/package-a/gooo-interchange-consumer-kit-v2.tar.gz
+            ${{ runner.temp }}/package-a/consumer-kit-v2/manifest.json
+            ${{ runner.temp }}/package-a/consumer-kit-v2/SHA256SUMS
+            ${{ runner.temp }}/consumer-kit-report.json
+            ${{ runner.temp }}/consumer-kit-replay.json
+            ${{ runner.temp }}/missing-release.json
+            ${{ runner.temp }}/generator-refuted.json
+            ${{ runner.temp }}/authority-refuted.json
+            ${{ runner.temp }}/invalid-core-decision.json
+            ${{ runner.temp }}/counterexamples.json
+            ${{ runner.temp }}/release-observation.json
+            ${{ runner.temp }}/kit-observation.json
+            ${{ runner.temp }}/envelope-observation.json
+            ${{ runner.temp }}/runtime.json
+            ${{ runner.temp }}/syntax.json
+            ${{ runner.temp }}/semantic.json
+            ${{ runner.temp }}/graph.json
+            ${{ runner.temp }}/core-resolution-observation.json
+            ${{ runner.temp }}/consumer-reports
