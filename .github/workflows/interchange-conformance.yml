@@ -23,7 +23,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$SUBJECT_SHA"
       - name: Download immutable Gooo and link observation releases
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           verify_release() {
             lock=$1; prefix=$2
             repository=$(jq -r .repository "$lock"); tag=$(jq -r .tag "$lock"); tag_object=$(jq -r .tag_object_sha "$lock"); target=$(jq -r .target_commit_sha "$lock")
@@ -65,7 +65,7 @@ jobs:
             ($receipts[0]) as $r|{schema:"gooo/interchange/core-resolution-observation/v1",core_release:{repository:$lock[0].repository,tag:$lock[0].tag,tag_object_sha:$lock[0].tag_object_sha,target_commit_sha:$lock[0].target_commit_sha,binary_asset:$lock[0].asset.name,binary_sha256:$lock[0].asset.sha256,resolution_schema:$lock[0].resolution_schema},summary:{expected:12,observed:($r|length),closed:([$r[]|select(.decision=="CLOSED")]|length),unknown:([$r[]|select(.decision=="UNKNOWN")]|length),refuted:([$r[]|select(.decision=="REFUTED")]|length)},receipts:$r}' > "$RUNNER_TEMP/core-resolution-observation.json"
       - name: Generate and conform nine golden bundles
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           snapshot() { find "$GITHUB_WORKSPACE" -path "$GITHUB_WORKSPACE/.git" -prune -o -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}'; }
           before=$(snapshot); matrix=fixtures/golden-v1.json; mkdir -p "$RUNNER_TEMP/bundles" "$RUNNER_TEMP/replays" "$RUNNER_TEMP/reports"
           first=$(jq -r '.fixtures[0].id' "$matrix")
