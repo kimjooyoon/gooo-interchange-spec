@@ -42,5 +42,5 @@ jq -S -n --argjson checks "$checks" --slurpfile project "$bundle/project.json" '
   ([$checks[]|select(.state=="REFUTED")]|length) as $refuted |
   ([$checks[]|select(.state!="CLOSED")][0]//null) as $first |
   {schema:"gooo/interchange/bundle-conformance-report/v1",fixture_id:$project[0].fixture_id,domain:$project[0].domain,
-   decision:(if $refuted>0 then "FAIL_CLOSED" else "CONFORMANT" end),summary:{total:6,closed:$closed,unknown:0,refuted:$refuted,required_files:5,external_required_gates:$project[0].external_required_gates?//0},
+   decision:(if $refuted>0 then "FAIL_CLOSED" else "CONFORMANT" end),summary:{total:6,closed:$closed,unknown:0,refuted:$refuted,required_files:5,external_required_gates:($project[0].external_required_gates? // 0)},
    claim:(if $first==null then {state:"CLOSED",stage:null,step:null,reason:"BUNDLE_CONFORMANT",next_operation:"NONE",unknown_class:null} else {state:$first.state,stage:$first.stage,step:$first.step,reason:$first.reason,next_operation:$first.next_operation,unknown_class:$first.unknown_class} end),checks:$checks}' > "$output"
