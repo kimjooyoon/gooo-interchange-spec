@@ -1,0 +1,29 @@
+package interchange
+namespace interchange
+
+entity CoreRelease id "gooo://release/v0.4.0-dev"
+entity LocalRelease id "gooo://local-ledger/release/v0.8.0-dev"
+entity DesignRelease id "gooo://design-evidence/release/v0.7.0-dev"
+entity InfraRelease id "gooo://infra-evidence/release/v0.8.0-dev"
+entity DomainRelation id "gooo://interchange/entity/domain-relation-v2"
+entity EvidenceAnchor id "gooo://interchange/entity/evidence-anchor-v2"
+entity ClaimResolution id "gooo://interchange/entity/claim-resolution-v2"
+entity EightFileEnvelope id "gooo://interchange/entity/eight-file-envelope-v2"
+entity UnknownCoordinates id "gooo://interchange/entity/unknown-coordinates-v2"
+entity ReplayReceipt id "gooo://interchange/entity/replay-receipt-v2"
+entity InvalidEnvelope id "gooo://interchange/entity/invalid-envelope-v2"
+entity ReadOnlyAuthority id "gooo://interchange/entity/read-only-authority-v2"
+entity SpecificationDecision id "gooo://interchange/entity/released-domain-decision-v2"
+
+activity ObserveCurrentCoreRelease(CoreRelease) -> SpecificationDecision
+activity ObserveLocalProductRelease(LocalRelease) -> SpecificationDecision
+activity ObserveDesignProductRelease(DesignRelease) -> SpecificationDecision
+activity ObserveInfraProductRelease(InfraRelease) -> SpecificationDecision
+activity SeparateDomainRelation(DomainRelation) -> SpecificationDecision
+activity AnchorReleasedEvidence(EvidenceAnchor) -> SpecificationDecision
+activity SeparateClaimResolution(ClaimResolution) -> SpecificationDecision
+activity PublishEightFileEnvelope(EightFileEnvelope) -> SpecificationDecision
+activity PreserveSixUnknownCoordinates(UnknownCoordinates) -> SpecificationDecision
+activity VerifyMachineReadableReplay(ReplayReceipt) -> SpecificationDecision
+activity RefuteInvalidEnvelope(InvalidEnvelope) -> SpecificationDecision
+activity PreserveReadOnlyAuthority(ReadOnlyAuthority) -> SpecificationDecision

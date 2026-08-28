@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gooo://schema/interchange/project/v2",
+  "type": "object",
+  "required": ["schema", "project_id", "domain", "release", "source", "relation_count", "evidence_count", "resolution_count", "unknown_count", "authority"],
+  "properties": {
+    "schema": {"const": "gooo/interchange/project/v2"},
+    "project_id": {"type": "string", "minLength": 1},
+    "domain": {"enum": ["local-ledger", "design-evidence", "infra-evidence"]},
+    "release": {
+      "type": "object",
+      "required": ["repository", "tag", "target_commit_sha"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "minLength": 1},
+        "target_commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["asset_name", "asset_sha256", "member", "schema"],
+      "properties": {
+        "asset_name": {"type": "string", "minLength": 1},
+        "asset_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "member": {"type": ["string", "null"]},
+        "schema": {"type": "string", "minLength": 1}
+      }
+    },
+    "relation_count": {"type": "integer", "minimum": 1},
+    "evidence_count": {"type": "integer", "minimum": 1},
+    "resolution_count": {"type": "integer", "minimum": 1},
+    "unknown_count": {"type": "integer", "minimum": 0},
+    "authority": {
+      "const": {"projection_owner": "INTERCHANGE_SPECIFICATION", "domain_release_adoption_claimed": false, "source_repository_writes": 0, "product_generation_authorized": false}
+    }
+  }
+}

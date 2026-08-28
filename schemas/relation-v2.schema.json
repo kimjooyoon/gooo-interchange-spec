@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gooo://schema/interchange/relation/v2",
+  "type": "object",
+  "required": ["schema", "id", "kind", "domain_state", "disposition", "left", "right", "evidence_ids", "attributes", "authority"],
+  "properties": {
+    "schema": {"const": "gooo/interchange/relation/v2"},
+    "id": {"type": "string", "minLength": 1},
+    "kind": {"type": "string", "minLength": 1},
+    "domain_state": {"type": "string", "minLength": 1},
+    "disposition": {"type": "string", "minLength": 1},
+    "left": {"type": "object", "required": ["kind", "id"]},
+    "right": {"type": "object", "required": ["kind", "id"]},
+    "evidence_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "attributes": {"type": "object"},
+    "authority": {"const": {"domain_semantics_preserved": true, "claim_resolution_embedded": false}}
+  }
+}
