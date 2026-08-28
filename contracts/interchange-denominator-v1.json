@@ -1,0 +1,29 @@
+{
+  "schema": "gooo/interchange/denominator/v1",
+  "id": "gooo://denominator/interchange-envelope-v1",
+  "target_cells": 12,
+  "proof_totals": [
+    {"proof_choice": "FOUNDATION", "total": 4},
+    {"proof_choice": "COHERENCE", "total": 4},
+    {"proof_choice": "REGRESSION", "total": 4}
+  ],
+  "indicator_totals": [
+    {"indicator_class": "OUTCOME", "total": 3},
+    {"indicator_class": "DRIVER", "total": 5},
+    {"indicator_class": "GUARDRAIL", "total": 4}
+  ],
+  "cells": [
+    {"ordinal": 1, "id": "RELEASED_GOOO_IDENTITY", "activity": "ObserveReleasedGoooIdentity", "stage": "CORE_RELEASE", "step": "OBSERVE_RELEASED_GOOO_IDENTITY", "proof_choice": "FOUNDATION", "indicator_class": "DRIVER", "core_identity_anchor": true, "closed_reason": "RELEASED_GOOO_IDENTITY_OBSERVED", "unknown_reason": "RELEASED_GOOO_IDENTITY_UNAVAILABLE", "next_operation": "FETCH_PINNED_GOOO_RELEASE", "depends_on": []},
+    {"ordinal": 2, "id": "LINK_OBSERVATION_IDENTITY", "activity": "ObserveLinkObservationIdentity", "stage": "LINK_RELEASE", "step": "OBSERVE_LINK_OBSERVATION_IDENTITY", "proof_choice": "FOUNDATION", "indicator_class": "DRIVER", "closed_reason": "LINK_OBSERVATION_IDENTITY_OBSERVED", "unknown_reason": "LINK_OBSERVATION_UNAVAILABLE", "next_operation": "FETCH_PINNED_LINK_OBSERVATION", "depends_on": ["RELEASED_GOOO_IDENTITY"]},
+    {"ordinal": 3, "id": "PROMOTION_UNKNOWN_INPUT", "activity": "ObservePromotionUnknown", "stage": "OBSERVATION", "step": "OBSERVE_PROMOTION_UNKNOWN", "proof_choice": "FOUNDATION", "indicator_class": "DRIVER", "closed_reason": "PROMOTION_UNKNOWN_INPUT_OBSERVED", "unknown_reason": "PROMOTION_UNKNOWN_INPUT_UNAVAILABLE", "next_operation": "PROVIDE_PROMOTION_UNKNOWN_OBSERVATION", "depends_on": ["LINK_OBSERVATION_IDENTITY"]},
+    {"ordinal": 4, "id": "INTERCHANGE_AUTHORITY", "activity": "DeclareInterchangeAuthority", "stage": "AUTHORITY", "step": "DECLARE_INTERCHANGE_AUTHORITY", "proof_choice": "FOUNDATION", "indicator_class": "DRIVER", "closed_reason": "INTERCHANGE_AUTHORITY_DECLARED", "unknown_reason": "INTERCHANGE_AUTHORITY_UNAVAILABLE", "next_operation": "DECLARE_INTERCHANGE_AUTHORITY", "depends_on": ["PROMOTION_UNKNOWN_INPUT"]},
+    {"ordinal": 5, "id": "PROJECT_ENVELOPE", "activity": "DefineProjectEnvelope", "stage": "SCHEMA", "step": "DEFINE_PROJECT_ENVELOPE", "proof_choice": "COHERENCE", "indicator_class": "DRIVER", "closed_reason": "PROJECT_ENVELOPE_DEFINED", "unknown_reason": "PROJECT_ENVELOPE_UNAVAILABLE", "next_operation": "DEFINE_PROJECT_ENVELOPE", "depends_on": ["INTERCHANGE_AUTHORITY"]},
+    {"ordinal": 6, "id": "RELATION_ENVELOPE", "activity": "DefineRelationEnvelope", "stage": "SCHEMA", "step": "DEFINE_RELATION_ENVELOPE", "proof_choice": "COHERENCE", "indicator_class": "GUARDRAIL", "closed_reason": "RELATION_ENVELOPE_DEFINED", "unknown_reason": "RELATION_ENVELOPE_UNAVAILABLE", "next_operation": "DEFINE_RELATION_ENVELOPE", "depends_on": ["PROJECT_ENVELOPE"]},
+    {"ordinal": 7, "id": "UNKNOWN_TUPLE", "activity": "DefineUnknownTuple", "stage": "UNCERTAINTY", "step": "DEFINE_UNKNOWN_TUPLE", "proof_choice": "COHERENCE", "indicator_class": "GUARDRAIL", "closed_reason": "UNKNOWN_TUPLE_DEFINED", "unknown_reason": "UNKNOWN_TUPLE_UNAVAILABLE", "next_operation": "DEFINE_UNKNOWN_TUPLE_FIELDS", "depends_on": ["RELATION_ENVELOPE"]},
+    {"ordinal": 8, "id": "FIVE_FILE_BUNDLES", "activity": "GenerateFiveFileBundles", "stage": "GENERATION", "step": "GENERATE_FIVE_FILE_BUNDLES", "proof_choice": "COHERENCE", "indicator_class": "OUTCOME", "closed_reason": "FIVE_FILE_BUNDLES_GENERATED", "unknown_reason": "BUNDLE_GENERATION_UNAVAILABLE", "next_operation": "GENERATE_INTERCHANGE_BUNDLES", "depends_on": ["UNKNOWN_TUPLE"]},
+    {"ordinal": 9, "id": "SIX_LOCAL_CHECKS", "activity": "ConformSixLocalChecks", "stage": "CONFORMANCE", "step": "CONFORM_SIX_LOCAL_CHECKS", "proof_choice": "REGRESSION", "indicator_class": "OUTCOME", "closed_reason": "SIX_LOCAL_CHECKS_CONFORMED", "unknown_reason": "LOCAL_CONFORMANCE_UNAVAILABLE", "next_operation": "RUN_LOCAL_BUNDLE_CONFORMANCE", "depends_on": ["FIVE_FILE_BUNDLES"]},
+    {"ordinal": 10, "id": "NINE_GOLDEN_FIXTURES", "activity": "ObserveNineGoldenFixtures", "stage": "FIXTURE", "step": "OBSERVE_NINE_GOLDEN_FIXTURES", "proof_choice": "REGRESSION", "indicator_class": "OUTCOME", "closed_reason": "NINE_GOLDEN_FIXTURES_OBSERVED", "unknown_reason": "GOLDEN_FIXTURES_UNAVAILABLE", "next_operation": "PROVIDE_GOLDEN_FIXTURES", "depends_on": ["SIX_LOCAL_CHECKS"]},
+    {"ordinal": 11, "id": "DETERMINISTIC_REPLAY", "activity": "ObserveDeterministicReplay", "stage": "REPLAY", "step": "OBSERVE_DETERMINISTIC_REPLAY", "proof_choice": "REGRESSION", "indicator_class": "GUARDRAIL", "closed_reason": "DETERMINISTIC_REPLAY_OBSERVED", "unknown_reason": "REPLAY_EVIDENCE_UNAVAILABLE", "next_operation": "RERUN_BUNDLE_GENERATION", "depends_on": ["NINE_GOLDEN_FIXTURES"]},
+    {"ordinal": 12, "id": "ZERO_EXTERNAL_GATES", "activity": "PreserveZeroExternalGates", "stage": "INDEPENDENCE", "step": "PRESERVE_ZERO_EXTERNAL_GATES", "proof_choice": "REGRESSION", "indicator_class": "GUARDRAIL", "closed_reason": "ZERO_EXTERNAL_REQUIRED_GATES_PRESERVED", "unknown_reason": "EXTERNAL_GATE_EVIDENCE_UNAVAILABLE", "next_operation": "DECLARE_EXTERNAL_GATE_COUNT", "depends_on": ["DETERMINISTIC_REPLAY"]}
+  ]
+}

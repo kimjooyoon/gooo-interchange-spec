@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gooo://schema/interchange/golden-matrix/v1",
+  "type": "object",
+  "required": ["schema", "fixtures"],
+  "properties": {
+    "schema": {"const": "gooo/interchange/golden-matrix/v1"},
+    "fixtures": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "items": {
+        "type": "object",
+        "required": ["id", "domain", "project", "relation"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "domain": {"enum": ["local-ledger", "design-evidence", "infra-evidence"]},
+          "project": {"type": "object"},
+          "relation": {"type": "object"}
+        }
+      }
+    }
+  }
+}

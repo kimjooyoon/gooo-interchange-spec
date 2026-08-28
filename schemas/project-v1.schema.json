@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gooo://schema/interchange/project/v1",
+  "type": "object",
+  "required": ["schema", "project_id", "domain", "release", "relation_count", "unknown_count"],
+  "properties": {
+    "schema": {"const": "gooo/interchange/project/v1"},
+    "project_id": {"type": "string", "minLength": 1},
+    "domain": {"type": "string", "minLength": 1},
+    "release": {
+      "type": "object",
+      "required": ["repository", "tag", "target_commit_sha", "source_asset_sha256"]
+    },
+    "relation_count": {"const": 1},
+    "unknown_count": {"type": "integer", "minimum": 0, "maximum": 1}
+  }
+}

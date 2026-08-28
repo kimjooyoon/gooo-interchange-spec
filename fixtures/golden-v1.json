@@ -1,0 +1,50 @@
+{
+  "schema": "gooo/interchange/golden-matrix/v1",
+  "fixtures": [
+    {
+      "id": "local-ledger-match", "domain": "local-ledger",
+      "project": {"id": "gooo://project/local-ledger", "repository": "kimjooyoon/gooo-local-ledger", "tag": "v0.3.0-dev", "target_commit_sha": "04118959144fbb5793367ab9ebb259d6990921cc", "source_asset_sha256": "18c7f0f0602984468a04458bc546f77406b3d7bfefcbd67b00997a6ef7a3cd65"},
+      "relation": {"kind": "PROJECT_RELEASE_EVIDENCE", "state": "MATCH", "left": {"kind": "PROJECT", "id": "gooo://project/local-ledger"}, "right": {"kind": "RELEASE", "id": "gooo://release/local-ledger/v0.3.0-dev"}, "expected_sha256": "18c7f0f0602984468a04458bc546f77406b3d7bfefcbd67b00997a6ef7a3cd65", "observed_sha256": "18c7f0f0602984468a04458bc546f77406b3d7bfefcbd67b00997a6ef7a3cd65", "stage": "RELEASE", "step": "BIND_PROJECT_RELEASE", "reason": "PROJECT_RELEASE_EVIDENCE_MATCHED", "unknown_class": null, "next_operation": "NONE"}
+    },
+    {
+      "id": "local-ledger-mismatch", "domain": "local-ledger",
+      "project": {"id": "gooo://project/local-ledger", "repository": "kimjooyoon/gooo-local-ledger", "tag": "v0.3.0-dev", "target_commit_sha": "04118959144fbb5793367ab9ebb259d6990921cc", "source_asset_sha256": "18c7f0f0602984468a04458bc546f77406b3d7bfefcbd67b00997a6ef7a3cd65"},
+      "relation": {"kind": "PROJECT_RELEASE_EVIDENCE", "state": "MISMATCH", "left": {"kind": "PROJECT", "id": "gooo://project/local-ledger"}, "right": {"kind": "RELEASE", "id": "gooo://release/local-ledger/v0.3.0-dev"}, "expected_sha256": "18c7f0f0602984468a04458bc546f77406b3d7bfefcbd67b00997a6ef7a3cd65", "observed_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "stage": "RELEASE", "step": "BIND_PROJECT_RELEASE", "reason": "PROJECT_RELEASE_EVIDENCE_MISMATCH", "unknown_class": null, "next_operation": "RESTORE_RELEASE_ASSET_IDENTITY"}
+    },
+    {
+      "id": "local-ledger-unknown", "domain": "local-ledger",
+      "project": {"id": "gooo://project/local-ledger", "repository": "kimjooyoon/gooo-local-ledger", "tag": "v0.3.0-dev", "target_commit_sha": "04118959144fbb5793367ab9ebb259d6990921cc", "source_asset_sha256": "18c7f0f0602984468a04458bc546f77406b3d7bfefcbd67b00997a6ef7a3cd65"},
+      "relation": {"kind": "PROJECT_SOURCE_SNAPSHOT", "state": "UNKNOWN", "left": {"kind": "PROJECT", "id": "gooo://project/local-ledger"}, "right": {"kind": "SOURCE_SNAPSHOT", "id": "gooo://snapshot/local-ledger/current"}, "expected_sha256": "18c7f0f0602984468a04458bc546f77406b3d7bfefcbd67b00997a6ef7a3cd65", "observed_sha256": null, "stage": "SOURCE", "step": "OBSERVE_SOURCE_SNAPSHOT", "reason": "SOURCE_SNAPSHOT_UNAVAILABLE", "unknown_class": "DIRECT_MISSING", "next_operation": "PROVIDE_SOURCE_SNAPSHOT"}
+    },
+    {
+      "id": "design-evidence-match", "domain": "design-evidence",
+      "project": {"id": "gooo://project/design-evidence", "repository": "kimjooyoon/gooo-design-evidence", "tag": "v0.3.0-dev", "target_commit_sha": "89d6adb3a3c64d118526342724cf3aa9243a6d17", "source_asset_sha256": "2e624c4361d248f7a012fc4e28c878430789349863b7405f4ed246cf99f85ed5"},
+      "relation": {"kind": "DESIGN_COMPONENT_CODE_SYMBOL", "state": "MATCH", "left": {"kind": "DESIGN_COMPONENT", "id": "figma://component/Button"}, "right": {"kind": "CODE_SYMBOL", "id": "go://design/Button"}, "expected_sha256": "2e624c4361d248f7a012fc4e28c878430789349863b7405f4ed246cf99f85ed5", "observed_sha256": "2e624c4361d248f7a012fc4e28c878430789349863b7405f4ed246cf99f85ed5", "stage": "DESIGN_CODE", "step": "BIND_COMPONENT_SYMBOL", "reason": "DESIGN_COMPONENT_CODE_SYMBOL_MATCHED", "unknown_class": null, "next_operation": "NONE"}
+    },
+    {
+      "id": "design-evidence-mismatch", "domain": "design-evidence",
+      "project": {"id": "gooo://project/design-evidence", "repository": "kimjooyoon/gooo-design-evidence", "tag": "v0.3.0-dev", "target_commit_sha": "89d6adb3a3c64d118526342724cf3aa9243a6d17", "source_asset_sha256": "2e624c4361d248f7a012fc4e28c878430789349863b7405f4ed246cf99f85ed5"},
+      "relation": {"kind": "DESIGN_TOKEN_CODE_TOKEN", "state": "MISMATCH", "left": {"kind": "DESIGN_TOKEN", "id": "token://color/action"}, "right": {"kind": "CODE_TOKEN", "id": "go://token/ActionColor"}, "expected_sha256": "2e624c4361d248f7a012fc4e28c878430789349863b7405f4ed246cf99f85ed5", "observed_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "stage": "TOKEN", "step": "BIND_TOKEN_LINEAGE", "reason": "DESIGN_TOKEN_CODE_TOKEN_MISMATCH", "unknown_class": null, "next_operation": "RESTORE_TOKEN_LINEAGE"}
+    },
+    {
+      "id": "design-evidence-unknown", "domain": "design-evidence",
+      "project": {"id": "gooo://project/design-evidence", "repository": "kimjooyoon/gooo-design-evidence", "tag": "v0.3.0-dev", "target_commit_sha": "89d6adb3a3c64d118526342724cf3aa9243a6d17", "source_asset_sha256": "2e624c4361d248f7a012fc4e28c878430789349863b7405f4ed246cf99f85ed5"},
+      "relation": {"kind": "DESIGN_COMPONENT_CODE_SYMBOL", "state": "UNKNOWN", "left": {"kind": "DESIGN_COMPONENT", "id": "figma://component/Field"}, "right": {"kind": "CODE_SYMBOL", "id": "go://design/Field"}, "expected_sha256": "2e624c4361d248f7a012fc4e28c878430789349863b7405f4ed246cf99f85ed5", "observed_sha256": null, "stage": "DESIGN_SOURCE", "step": "OBSERVE_DESIGN_NODE", "reason": "DESIGN_NODE_UNAVAILABLE", "unknown_class": "DIRECT_MISSING", "next_operation": "PROVIDE_DESIGN_NODE_RECEIPT"}
+    },
+    {
+      "id": "infra-evidence-match", "domain": "infra-evidence",
+      "project": {"id": "gooo://project/infra-evidence", "repository": "kimjooyoon/gooo-infra-evidence", "tag": "v0.2.0-dev", "target_commit_sha": "a458b996839b84492fde231c25969bf99fa9e1b7", "source_asset_sha256": "cd737d809d2d56de2ff51cd6d6d20e8c8e0f833a5f0ac5c9fb39f3c98ef64dc9"},
+      "relation": {"kind": "OPENAPI_OPERATION_GO_HANDLER", "state": "MATCH", "left": {"kind": "OPENAPI_OPERATION", "id": "openapi://GET/health/getHealth"}, "right": {"kind": "GO_HANDLER", "id": "go://service/health"}, "expected_sha256": "cd737d809d2d56de2ff51cd6d6d20e8c8e0f833a5f0ac5c9fb39f3c98ef64dc9", "observed_sha256": "cd737d809d2d56de2ff51cd6d6d20e8c8e0f833a5f0ac5c9fb39f3c98ef64dc9", "stage": "SERVICE_SYMBOL", "step": "BIND_OPENAPI_OPERATION_TO_GO_HANDLER", "reason": "OPENAPI_OPERATION_GO_HANDLER_MATCHED", "unknown_class": null, "next_operation": "NONE"}
+    },
+    {
+      "id": "infra-evidence-mismatch", "domain": "infra-evidence",
+      "project": {"id": "gooo://project/infra-evidence", "repository": "kimjooyoon/gooo-infra-evidence", "tag": "v0.2.0-dev", "target_commit_sha": "a458b996839b84492fde231c25969bf99fa9e1b7", "source_asset_sha256": "cd737d809d2d56de2ff51cd6d6d20e8c8e0f833a5f0ac5c9fb39f3c98ef64dc9"},
+      "relation": {"kind": "ARTIFACT_DEPLOYMENT", "state": "MISMATCH", "left": {"kind": "ARTIFACT", "id": "oci://checkout/sha256:aaaaaaaa"}, "right": {"kind": "DEPLOYMENT", "id": "deployment://prod/checkout"}, "expected_sha256": "cd737d809d2d56de2ff51cd6d6d20e8c8e0f833a5f0ac5c9fb39f3c98ef64dc9", "observed_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", "stage": "DEPLOYMENT", "step": "BIND_DEPLOYMENT_OUTPUT", "reason": "ARTIFACT_DEPLOYMENT_MISMATCH", "unknown_class": null, "next_operation": "RESTORE_DEPLOYMENT_ARTIFACT_IDENTITY"}
+    },
+    {
+      "id": "infra-evidence-unknown", "domain": "infra-evidence",
+      "project": {"id": "gooo://project/infra-evidence", "repository": "kimjooyoon/gooo-infra-evidence", "tag": "v0.2.0-dev", "target_commit_sha": "a458b996839b84492fde231c25969bf99fa9e1b7", "source_asset_sha256": "cd737d809d2d56de2ff51cd6d6d20e8c8e0f833a5f0ac5c9fb39f3c98ef64dc9"},
+      "relation": {"kind": "TERRAFORM_PLAN_STATE", "state": "UNKNOWN", "left": {"kind": "TERRAFORM_PLAN", "id": "terraform://plan/checkout"}, "right": {"kind": "TERRAFORM_STATE", "id": "terraform://state/checkout"}, "expected_sha256": "cd737d809d2d56de2ff51cd6d6d20e8c8e0f833a5f0ac5c9fb39f3c98ef64dc9", "observed_sha256": null, "stage": "INFRA_STATE", "step": "BIND_TERRAFORM_STATE", "reason": "TERRAFORM_STATE_UNAVAILABLE", "unknown_class": "DIRECT_MISSING", "next_operation": "PROVIDE_TERRAFORM_STATE_RECEIPT"}
+    }
+  ]
+}
