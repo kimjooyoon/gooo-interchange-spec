@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           lock=contracts/released-domain-envelope-release-lock-v2.json
           verify_release() {
-            record=$1; prefix=$2
+            local record=$1 prefix=$2 repository tag type object target
             repository=$(jq -r .repository <<<"$record"); tag=$(jq -r .tag <<<"$record")
             type=$(jq -r .ref_object_type <<<"$record"); object=$(jq -r .ref_object_sha <<<"$record"); target=$(jq -r .target_commit_sha <<<"$record")
             gh api "repos/$repository/git/ref/tags/$tag" > "$RUNNER_TEMP/$prefix-ref.json"
@@ -45,11 +45,11 @@ jobs:
             gh api "repos/$repository/releases/tags/$tag" > "$RUNNER_TEMP/$prefix-release.json"
           }
           download_asset() {
-            record=$1; asset=$2; prefix=$3; output=$4
+            local record=$1 asset=$2 prefix=$3 output=$4 repository name expected asset_id
             repository=$(jq -r .repository <<<"$record"); name=$(jq -r .name <<<"$asset"); expected=$(jq -r .sha256 <<<"$asset")
-            id=$(jq -r --arg name "$name" '.assets[]|select(.name==$name)|.id' "$RUNNER_TEMP/$prefix-release.json")
-            test -n "$id"
-            gh api -H 'Accept: application/octet-stream' "repos/$repository/releases/assets/$id" > "$output"
+            asset_id=$(jq -r --arg name "$name" '.assets[]|select(.name==$name)|.id' "$RUNNER_TEMP/$prefix-release.json")
+            test -n "$asset_id"
+            gh api -H 'Accept: application/octet-stream' "repos/$repository/releases/assets/$asset_id" > "$output"
             test "$(sha256sum "$output"|awk '{print $1}')" = "$expected"
           }
           core=$(jq -c .core "$lock"); verify_release "$core" core
