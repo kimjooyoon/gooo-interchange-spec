@@ -77,14 +77,14 @@ jobs:
         run: |
           set -euo pipefail
           gooo="$RUNNER_TEMP/core/gooo"; source=examples/released-domain-envelope-v2/main.gooo; denominator=contracts/released-domain-envelope-denominator-v2.json
-          "$gooo" check --json "$source" > "$RUNNER_TEMP/syntax.json"
-          "$gooo" check --semantic --json "$source" > "$RUNNER_TEMP/semantic.json"
-          "$gooo" graph dump "$source" > "$RUNNER_TEMP/graph.json"
+          if ! "$gooo" check --json "$source" > "$RUNNER_TEMP/syntax.json"; then jq . "$RUNNER_TEMP/syntax.json"; exit 1; fi
+          if ! "$gooo" check --semantic --json "$source" > "$RUNNER_TEMP/semantic.json"; then jq . "$RUNNER_TEMP/semantic.json"; exit 1; fi
+          if ! "$gooo" graph dump "$source" > "$RUNNER_TEMP/graph.json"; then cat "$RUNNER_TEMP/graph.json"; exit 1; fi
           jq -e '.status=="ok"' "$RUNNER_TEMP/syntax.json" "$RUNNER_TEMP/semantic.json" >/dev/null
           mkdir "$RUNNER_TEMP/core-resolutions"
           while IFS=$'\t' read -r ordinal activity; do
             printf -v receipt '%s/core-resolutions/%02d-%s.json' "$RUNNER_TEMP" "$ordinal" "$activity"
-            "$gooo" graph resolve-activity "$source" --name "$activity" > "$receipt"
+            if ! "$gooo" graph resolve-activity "$source" --name "$activity" > "$receipt"; then jq . "$receipt"; exit 1; fi
             jq -e --arg activity "$activity" '.schema=="gooo/activity-cardinality-resolution/v1" and .selector.name==$activity and .decision=="CLOSED" and .occurrences==1 and .claim.state=="CLOSED" and .claim.reason=="ACTIVITY_UNIQUELY_RESOLVED"' "$receipt" >/dev/null
           done < <(jq -r '.cells[]|[.ordinal,.activity]|@tsv' "$denominator")
           jq -S -s '.' "$RUNNER_TEMP"/core-resolutions/*.json > "$RUNNER_TEMP/core-receipts.json"
@@ -220,4 +220,8 @@ jobs:
             ${{ runner.temp }}/runtime.json
             ${{ runner.temp }}/release-observation.json
             ${{ runner.temp }}/core-resolution-observation.json
+            ${{ runner.temp }}/syntax.json
+            ${{ runner.temp }}/semantic.json
+            ${{ runner.temp }}/graph.json
+            ${{ runner.temp }}/core-resolutions
             ${{ runner.temp }}/bundles
