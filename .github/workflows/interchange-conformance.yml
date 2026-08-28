@@ -87,7 +87,7 @@ jobs:
              bundles:($r|length),generated_files:([range(0;($r|length))|5]|add),project_files:($r|length),relation_rows:($r|length),relation_anchors:($r|length),unknown_rows:([$fixtures[]|select(.relation.state=="UNKNOWN")]|length),
              unknown_tuples:([$fixtures[]|select(.relation.state=="UNKNOWN" and (.relation|has("stage") and has("step") and has("reason") and has("unknown_class") and has("next_operation")))]|length),
            local_checks_closed:([$r[].summary.closed]|add),local_checks_total:([$r[].summary.total]|add),replays_closed:([$r[]|select(.checks[]|select(.id=="DETERMINISTIC_REPLAY" and .state=="CLOSED"))]|length),replays_total:($r|length),external_required_gates:([$r[].summary.external_required_gates]|add),schema_files:4,
-           authority:{source:"GOLDEN_FIXTURES",domain_release_adoption:"NOT_CLAIMED",cross_project_required_gates:0}}' > "$RUNNER_TEMP/aggregate.json"
+           refuted_checks:([$r[]|.checks[]|select(.state=="REFUTED")|{id,reason}]),authority:{source:"GOLDEN_FIXTURES",domain_release_adoption:"NOT_CLAIMED",cross_project_required_gates:0}}' > "$RUNNER_TEMP/aggregate.json"
           jq . "$RUNNER_TEMP/aggregate.json"
           jq -e '.fixtures==9 and .domains==3 and .states=={MATCH:3,MISMATCH:3,UNKNOWN:3} and .bundles==9 and .generated_files==45 and .local_checks_closed==54 and .local_checks_total==54 and .unknown_tuples==3 and .replays_closed==9 and .external_required_gates==0' "$RUNNER_TEMP/aggregate.json" >/dev/null
           cp -R "$RUNNER_TEMP/bundles/$first" "$RUNNER_TEMP/bad-checksum"; cp -R "$RUNNER_TEMP/bundles/$first" "$RUNNER_TEMP/bad-checksum-replay"
