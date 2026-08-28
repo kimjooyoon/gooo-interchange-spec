@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gooo://schema/interchange/evidence/v2",
+  "type": "object",
+  "required": ["schema", "id", "relation_id", "source", "observation", "authority"],
+  "properties": {
+    "schema": {"const": "gooo/interchange/evidence/v2"},
+    "id": {"type": "string", "minLength": 1},
+    "relation_id": {"type": "string", "minLength": 1},
+    "source": {
+      "type": "object",
+      "required": ["repository", "tag", "target_commit_sha", "asset_name", "asset_sha256", "member", "json_pointer"],
+      "properties": {
+        "target_commit_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "asset_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "json_pointer": {"type": "string", "pattern": "^/"}
+      }
+    },
+    "observation": {
+      "type": "object",
+      "required": ["kind", "value_sha256"],
+      "properties": {
+        "kind": {"const": "RELEASED_JSON_VALUE"},
+        "value_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "authority": {"const": {"claim_scope": "RELEASED_DECLARATION_ONLY", "semantic_truth_claimed": false}}
+  }
+}

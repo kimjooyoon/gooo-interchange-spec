@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gooo://schema/interchange/replay/v2",
+  "type": "object",
+  "required": ["schema", "source", "projection", "authority"],
+  "properties": {
+    "schema": {"const": "gooo/interchange/replay/v2"},
+    "source": {
+      "type": "object",
+      "required": ["receipt_schema", "comparisons_satisfied", "comparisons_total", "receipt_verified"],
+      "properties": {
+        "comparisons_satisfied": {"type": "integer", "minimum": 1},
+        "comparisons_total": {"type": "integer", "minimum": 1},
+        "receipt_verified": {"const": true}
+      }
+    },
+    "projection": {
+      "type": "object",
+      "required": ["payload_files", "payload_sha256"],
+      "properties": {
+        "payload_files": {"const": 6},
+        "payload_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "authority": {"const": {"determinism_is_semantic_truth": false, "product_execution_authorized": false}}
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schema": "gooo/interchange/released-domain-envelope-release-lock/v2",
+  "core": {
+    "repository": "kimjooyoon/meta-ontology-go",
+    "tag": "v0.4.0-dev",
+    "ref_object_type": "commit",
+    "ref_object_sha": "57ac9ec486bbca69e447a8eba94e0ce3cd03ced0",
+    "target_commit_sha": "57ac9ec486bbca69e447a8eba94e0ce3cd03ced0",
+    "assets": [
+      {"role": "binary", "name": "gooo-linux-amd64.tar.gz", "size": 7057764, "sha256": "3f6f34156dc959c4ae80711ff55cfbd135023fd57df673d28247e1894bf42f48"},
+      {"role": "checksums", "name": "SHA256SUMS", "size": 270, "sha256": "58f6882f9dc056af40e3892fbf8c4a702ff7123c2c7ff4fd4d1c26350297fe12"}
+    ]
+  },
+  "products": [
+    {
+      "id": "local-ledger",
+      "domain": "local-ledger",
+      "repository": "kimjooyoon/gooo-local-ledger",
+      "tag": "v0.8.0-dev",
+      "ref_object_type": "commit",
+      "ref_object_sha": "7e80cbc84f76e8176436e0488886649761ed3aaf",
+      "target_commit_sha": "7e80cbc84f76e8176436e0488886649761ed3aaf",
+      "source_asset": {"name": "project-plan.json", "size": 6644, "sha256": "7695be29459bb5b03c5af9d0518a925b90a4e56ccb13c573128ef52668c96f75", "member": null},
+      "replay_asset": {"name": "replay.json", "size": 143, "sha256": "c0e302ddf815d3808de80e28239b6c23912dc8c2c7a116cdb8cb3853ac05f218", "member": null}
+    },
+    {
+      "id": "design-evidence",
+      "domain": "design-evidence",
+      "repository": "kimjooyoon/gooo-design-evidence",
+      "tag": "v0.7.0-dev",
+      "ref_object_type": "commit",
+      "ref_object_sha": "1a0ef8ebd79d0fb7b3185d5126ca1098b7e24d37",
+      "target_commit_sha": "1a0ef8ebd79d0fb7b3185d5126ca1098b7e24d37",
+      "source_asset": {"name": "design-review-packet-1a0ef8ebd79d0fb7b3185d5126ca1098b7e24d37.zip", "size": 37458, "sha256": "dd79c754f7fc2a5326ddae0c1a141a8afc7deef8f6e7cf5d07aa9a5158054706", "member": "design-review-packet.json"},
+      "replay_asset": {"name": "design-review-packet-1a0ef8ebd79d0fb7b3185d5126ca1098b7e24d37.zip", "size": 37458, "sha256": "dd79c754f7fc2a5326ddae0c1a141a8afc7deef8f6e7cf5d07aa9a5158054706", "member": "review-decision-replay.json"}
+    },
+    {
+      "id": "infra-evidence",
+      "domain": "infra-evidence",
+      "repository": "kimjooyoon/gooo-infra-evidence",
+      "tag": "v0.8.0-dev",
+      "ref_object_type": "commit",
+      "ref_object_sha": "29008f2cd45f5c2a2ccec8fce8f143b30c85bfa2",
+      "target_commit_sha": "29008f2cd45f5c2a2ccec8fce8f143b30c85bfa2",
+      "source_asset": {"name": "deployment-plan.json", "size": 7998, "sha256": "ee4d57e826bcb4b146fea59450603cb4e5ee22878a06cef9d6e64b8a29f66458", "member": null},
+      "replay_asset": {"name": "semantic-deployment-plan-replay.json", "size": 148, "sha256": "ed3c2f9700ec525ad4cf409017fde469ab17279c5e7f2fd5ecaa93a01ecdd72d", "member": null}
+    }
+  ]
+}

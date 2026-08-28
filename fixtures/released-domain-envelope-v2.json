@@ -1,0 +1,48 @@
+{
+  "schema": "gooo/interchange/released-domain-projection-matrix/v2",
+  "expected": {
+    "products": 3,
+    "relations": 20,
+    "evidence": 20,
+    "resolutions": 20,
+    "unknowns": 0,
+    "files_per_envelope": 8,
+    "generated_files": 24,
+    "local_checks_per_envelope": 10,
+    "local_checks": 30,
+    "source_replay_receipts": 3,
+    "source_replay_comparisons": 19,
+    "valid_unknown_cases": 1,
+    "unknown_coordinate_fields": 6,
+    "refuted_counterexamples": 5
+  },
+  "products": [
+    {
+      "id": "local-ledger",
+      "domain": "local-ledger",
+      "mode": "DEPENDENCY",
+      "source_schema": "gooo/local-ledger/semantic-project-plan/v1",
+      "relation_array": "dependencies",
+      "expected_relations": 8,
+      "replay": {"schema": "gooo/local-ledger/semantic-project-plan-replay/v1", "satisfied_path": ["comparisons_satisfied"], "total_path": ["comparisons_total"], "expected": 7}
+    },
+    {
+      "id": "design-evidence",
+      "domain": "design-evidence",
+      "mode": "DESIGN_DISPOSITION",
+      "source_schema": "gooo/design-evidence/review-packet/v1",
+      "relation_array": "relation_dispositions",
+      "expected_relations": 4,
+      "replay": {"schema": "gooo/design-evidence/review-decision-replay/v1", "satisfied_path": ["receipts_equal"], "total_path": ["receipts_total"], "expected": 5}
+    },
+    {
+      "id": "infra-evidence",
+      "domain": "infra-evidence",
+      "mode": "DEPENDENCY",
+      "source_schema": "gooo/infra-evidence/semantic-deployment-plan/v1",
+      "relation_array": "dependencies",
+      "expected_relations": 8,
+      "replay": {"schema": "gooo/infra-evidence/semantic-deployment-plan-replay/v1", "satisfied_path": ["comparisons_satisfied"], "total_path": ["comparisons_total"], "expected": 7}
+    }
+  ]
+}

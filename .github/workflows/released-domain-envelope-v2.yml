@@ -1,0 +1,223 @@
+name: Released-domain envelope v2
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SUBJECT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SUBJECT_SHA }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.x'
+      - name: Bind exact subject and Go 1.27
+        run: |
+          test "$(git rev-parse HEAD)" = "$SUBJECT_SHA"
+          go version | grep -E 'go1\.27\.'
+      - name: Download immutable Core and product releases
+        run: |
+          set -euo pipefail
+          lock=contracts/released-domain-envelope-release-lock-v2.json
+          verify_release() {
+            record=$1; prefix=$2
+            repository=$(jq -r .repository <<<"$record"); tag=$(jq -r .tag <<<"$record")
+            type=$(jq -r .ref_object_type <<<"$record"); object=$(jq -r .ref_object_sha <<<"$record"); target=$(jq -r .target_commit_sha <<<"$record")
+            gh api "repos/$repository/git/ref/tags/$tag" > "$RUNNER_TEMP/$prefix-ref.json"
+            jq -e --arg type "$type" --arg object "$object" '.object.type==$type and .object.sha==$object' "$RUNNER_TEMP/$prefix-ref.json" >/dev/null
+            if test "$type" = tag; then
+              gh api "repos/$repository/git/tags/$object" > "$RUNNER_TEMP/$prefix-tag.json"
+              jq -e --arg target "$target" '.object.type=="commit" and .object.sha==$target' "$RUNNER_TEMP/$prefix-tag.json" >/dev/null
+            else
+              test "$object" = "$target"
+            fi
+            gh api "repos/$repository/releases/tags/$tag" > "$RUNNER_TEMP/$prefix-release.json"
+          }
+          download_asset() {
+            record=$1; asset=$2; prefix=$3; output=$4
+            repository=$(jq -r .repository <<<"$record"); name=$(jq -r .name <<<"$asset"); expected=$(jq -r .sha256 <<<"$asset")
+            id=$(jq -r --arg name "$name" '.assets[]|select(.name==$name)|.id' "$RUNNER_TEMP/$prefix-release.json")
+            test -n "$id"
+            gh api -H 'Accept: application/octet-stream' "repos/$repository/releases/assets/$id" > "$output"
+            test "$(sha256sum "$output"|awk '{print $1}')" = "$expected"
+          }
+          core=$(jq -c .core "$lock"); verify_release "$core" core
+          download_asset "$core" "$(jq -c '.assets[]|select(.role=="binary")' <<<"$core")" core "$RUNNER_TEMP/core.tar.gz"
+          download_asset "$core" "$(jq -c '.assets[]|select(.role=="checksums")' <<<"$core")" core "$RUNNER_TEMP/core-SHA256SUMS"
+          mkdir "$RUNNER_TEMP/core"; tar -xzf "$RUNNER_TEMP/core.tar.gz" -C "$RUNNER_TEMP/core"
+          for id in local-ledger design-evidence infra-evidence; do
+            record=$(jq -c --arg id "$id" '.products[]|select(.id==$id)' "$lock"); verify_release "$record" "$id"
+            source=$(jq -c .source_asset <<<"$record"); replay=$(jq -c .replay_asset <<<"$record")
+            download_asset "$record" "$source" "$id" "$RUNNER_TEMP/$id-source-asset"
+            if test "$(jq -r .name <<<"$source")" != "$(jq -r .name <<<"$replay")"; then
+              download_asset "$record" "$replay" "$id" "$RUNNER_TEMP/$id-replay-asset"
+            else
+              cp "$RUNNER_TEMP/$id-source-asset" "$RUNNER_TEMP/$id-replay-asset"
+            fi
+          done
+          cp "$RUNNER_TEMP/local-ledger-source-asset" "$RUNNER_TEMP/local-source.json"
+          cp "$RUNNER_TEMP/local-ledger-replay-asset" "$RUNNER_TEMP/local-replay.json"
+          unzip -p "$RUNNER_TEMP/design-evidence-source-asset" design-review-packet.json > "$RUNNER_TEMP/design-source.json"
+          unzip -p "$RUNNER_TEMP/design-evidence-replay-asset" review-decision-replay.json > "$RUNNER_TEMP/design-replay.json"
+          cp "$RUNNER_TEMP/infra-evidence-source-asset" "$RUNNER_TEMP/infra-source.json"
+          cp "$RUNNER_TEMP/infra-evidence-replay-asset" "$RUNNER_TEMP/infra-replay.json"
+          jq -S -n '{schema:"gooo/interchange/released-domain-release-observation/v2",core:{verified:true,assets_verified:2},products:{"local-ledger":{release_verified:true,assets_verified:2},"design-evidence":{release_verified:true,assets_verified:1},"infra-evidence":{release_verified:true,assets_verified:2}},summary:{releases_verified:4,product_assets_verified:5,core_assets_verified:2}}' > "$RUNNER_TEMP/release-observation.json"
+      - name: Resolve twelve Gooo meta activities
+        run: |
+          set -euo pipefail
+          gooo="$RUNNER_TEMP/core/gooo"; source=examples/released-domain-envelope-v2/main.gooo; denominator=contracts/released-domain-envelope-denominator-v2.json
+          "$gooo" check --json "$source" > "$RUNNER_TEMP/syntax.json"
+          "$gooo" check --semantic --json "$source" > "$RUNNER_TEMP/semantic.json"
+          "$gooo" graph dump "$source" > "$RUNNER_TEMP/graph.json"
+          jq -e '.status=="ok"' "$RUNNER_TEMP/syntax.json" "$RUNNER_TEMP/semantic.json" >/dev/null
+          mkdir "$RUNNER_TEMP/core-resolutions"
+          while IFS=$'\t' read -r ordinal activity; do
+            printf -v receipt '%s/core-resolutions/%02d-%s.json' "$RUNNER_TEMP" "$ordinal" "$activity"
+            "$gooo" graph resolve-activity "$source" --name "$activity" > "$receipt"
+            jq -e --arg activity "$activity" '.schema=="gooo/activity-cardinality-resolution/v1" and .selector.name==$activity and .decision=="CLOSED" and .occurrences==1 and .claim.state=="CLOSED" and .claim.reason=="ACTIVITY_UNIQUELY_RESOLVED"' "$receipt" >/dev/null
+          done < <(jq -r '.cells[]|[.ordinal,.activity]|@tsv' "$denominator")
+          jq -S -s '.' "$RUNNER_TEMP"/core-resolutions/*.json > "$RUNNER_TEMP/core-receipts.json"
+          jq -S -n --slurpfile receipts "$RUNNER_TEMP/core-receipts.json" '{schema:"gooo/interchange/core-resolution-observation/v2",summary:{expected:12,observed:($receipts[0]|length),closed:([$receipts[0][]|select(.decision=="CLOSED")]|length),unknown:0,refuted:0},receipts:$receipts[0]}' > "$RUNNER_TEMP/core-resolution-observation.json"
+      - name: Project and conform three released domains
+        run: |
+          set -euo pipefail
+          snapshot() { find "$GITHUB_WORKSPACE" -path "$GITHUB_WORKSPACE/.git" -prune -o -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | awk '{print $1}'; }
+          before=$(snapshot); matrix=fixtures/released-domain-envelope-v2.json; lock=contracts/released-domain-envelope-release-lock-v2.json
+          mkdir "$RUNNER_TEMP/bundles" "$RUNNER_TEMP/replays" "$RUNNER_TEMP/reports" "$RUNNER_TEMP/rss"
+          peak=0; start_ns=$(date +%s%N)
+          for id in local-ledger design-evidence infra-evidence; do
+            case "$id" in
+              local-ledger) source="$RUNNER_TEMP/local-source.json"; replay="$RUNNER_TEMP/local-replay.json";;
+              design-evidence) source="$RUNNER_TEMP/design-source.json"; replay="$RUNNER_TEMP/design-replay.json";;
+              infra-evidence) source="$RUNNER_TEMP/infra-source.json"; replay="$RUNNER_TEMP/infra-replay.json";;
+            esac
+            /usr/bin/time -f '%M' -o "$RUNNER_TEMP/rss/$id" bash scripts/generate-released-envelope-v2.sh "$GITHUB_WORKSPACE" "$matrix" "$lock" "$id" "$source" "$replay" "$RUNNER_TEMP/bundles/$id"
+            bash scripts/generate-released-envelope-v2.sh "$GITHUB_WORKSPACE" "$matrix" "$lock" "$id" "$source" "$replay" "$RUNNER_TEMP/replays/$id"
+            bash scripts/conform-released-envelope-v2.sh "$RUNNER_TEMP/bundles/$id" "$RUNNER_TEMP/replays/$id" "$RUNNER_TEMP/reports/$id.json"
+            value=$(cat "$RUNNER_TEMP/rss/$id"); test "$value" -le 131072; if test "$value" -gt "$peak"; then peak=$value; fi
+          done
+          end_ns=$(date +%s%N); wall_ms=$(( (end_ns-start_ns)/1000000 )); test "$wall_ms" -le 30000
+          jq -S -s '.' "$RUNNER_TEMP"/reports/*.json > "$RUNNER_TEMP/report-array.json"
+          jq -S -s '.' "$RUNNER_TEMP"/bundles/*/project.json > "$RUNNER_TEMP/project-array.json"
+          jq -S -s '.' "$RUNNER_TEMP"/bundles/*/replay.json > "$RUNNER_TEMP/replay-array.json"
+          jq -S -n --slurpfile reports "$RUNNER_TEMP/report-array.json" --slurpfile projects "$RUNNER_TEMP/project-array.json" --slurpfile replays "$RUNNER_TEMP/replay-array.json" '
+            ($reports[0]) as $r|($projects[0]) as $p|($replays[0]) as $replay|
+            {schema:"gooo/interchange/released-domain-aggregate/v2",products:($p|length),envelopes:($p|length),files:(($p|length)*8),relations:([$p[].relation_count]|add),evidence:([$p[].evidence_count]|add),resolutions:([$p[].resolution_count]|add),normal_unknowns:([$p[].unknown_count]|add),local_checks_closed:([$r[].summary.closed]|add),local_checks_total:([$r[].summary.total]|add),source_replay_receipts:($replay|length),source_replay_comparisons_satisfied:([$replay[].source.comparisons_satisfied]|add),source_replay_comparisons_total:([$replay[].source.comparisons_total]|add),projection_replays:([$r[]|select(.checks[]|select(.id=="DETERMINISTIC_REPLAY" and .state=="CLOSED"))]|length),valid_unknown_cases:0,unknown_coordinate_fields:0}' > "$RUNNER_TEMP/aggregate.json"
+          jq -e '.products==3 and .envelopes==3 and .files==24 and .relations==20 and .evidence==20 and .resolutions==20 and .normal_unknowns==0 and .local_checks_closed==30 and .local_checks_total==30 and .source_replay_receipts==3 and .source_replay_comparisons_satisfied==19 and .source_replay_comparisons_total==19 and .projection_replays==3' "$RUNNER_TEMP/aggregate.json" >/dev/null
+          after=$(snapshot); test "$before" = "$after"
+          jq -S -n --arg subject_sha "$SUBJECT_SHA" --arg go_version "$(go version|awk '{print $3}')" --argjson peak_rss_kib "$peak" --argjson wall_ms "$wall_ms" '{schema:"gooo/interchange/released-domain-runtime/v2",subject_sha:$subject_sha,go_version:$go_version,projection:{peak_rss_kib:$peak_rss_kib,wall_ms:$wall_ms},repository_writes:0,local_tests_run:0,go_fix_module_roots:0,cross_project_required_gates:0,product_generation_authorized:false,domain_release_adoption_claimed:false,central_orchestration_authorized:false}' > "$RUNNER_TEMP/runtime-base.json"
+      - name: Conform UNKNOWN and five fail-closed boundaries
+        run: |
+          set -euo pipefail
+          refresh() {
+            bundle=$1
+            payload=$(cd "$bundle" && sha256sum project.json evidence.ndjson relations.ndjson resolutions.ndjson unknowns.ndjson conformance.json | sha256sum | awk '{print $1}')
+            jq --arg payload "$payload" '.projection.payload_sha256=$payload' "$bundle/replay.json" > "$bundle/replay.tmp"; mv "$bundle/replay.tmp" "$bundle/replay.json"
+            (cd "$bundle" && sha256sum project.json evidence.ndjson relations.ndjson resolutions.ndjson unknowns.ndjson conformance.json replay.json > checksums.txt)
+          }
+          make_pair() { name=$1; cp -R "$RUNNER_TEMP/bundles/local-ledger" "$RUNNER_TEMP/$name"; cp -R "$RUNNER_TEMP/replays/local-ledger" "$RUNNER_TEMP/$name-replay"; }
+          mutate_unknown() {
+            bundle=$1; complete=$2
+            jq -cS --arg complete "$complete" '.[0]|.state="UNKNOWN"|.stage="EVIDENCE"|.step="OBSERVE_RELEASED_RELATION"|.reason="RELEASED_RELATION_EVIDENCE_MISSING"|.unknown_class="DIRECT_MISSING"|.next_operation="RESTORE_RELEASED_RELATION_EVIDENCE"|.blocked_by=[]|if $complete=="false" then del(.blocked_by) else . end' < <(jq -s '.' "$bundle/resolutions.ndjson") > "$bundle/first.json"
+            jq -cS --slurpfile first "$bundle/first.json" '.[0]=$first[0]|.[]' < <(jq -s '.' "$bundle/resolutions.ndjson") > "$bundle/resolutions.tmp"; mv "$bundle/resolutions.tmp" "$bundle/resolutions.ndjson"
+            cp "$bundle/first.json" "$bundle/unknowns.ndjson"; rm "$bundle/first.json"
+            jq '.unknown_count=1' "$bundle/project.json" > "$bundle/project.tmp"; mv "$bundle/project.tmp" "$bundle/project.json"
+            refresh "$bundle"
+          }
+          make_pair valid-unknown; mutate_unknown "$RUNNER_TEMP/valid-unknown" true; mutate_unknown "$RUNNER_TEMP/valid-unknown-replay" true
+          bash scripts/conform-released-envelope-v2.sh "$RUNNER_TEMP/valid-unknown" "$RUNNER_TEMP/valid-unknown-replay" "$RUNNER_TEMP/valid-unknown-report.json"
+          jq -e '.decision=="CONFORMANT" and .summary.closed==10 and .summary.unknowns==1' "$RUNNER_TEMP/valid-unknown-report.json" >/dev/null
+          jq '.valid_unknown_cases=1|.unknown_coordinate_fields=6' "$RUNNER_TEMP/aggregate.json" > "$RUNNER_TEMP/aggregate.tmp"; mv "$RUNNER_TEMP/aggregate.tmp" "$RUNNER_TEMP/aggregate.json"
+
+          mkdir "$RUNNER_TEMP/counter-reports"
+          make_pair bad-checksum; printf '\n' >> "$RUNNER_TEMP/bad-checksum/project.json"; printf '\n' >> "$RUNNER_TEMP/bad-checksum-replay/project.json"
+          bash scripts/conform-released-envelope-v2.sh "$RUNNER_TEMP/bad-checksum" "$RUNNER_TEMP/bad-checksum-replay" "$RUNNER_TEMP/counter-reports/01-checksum.json"
+
+          make_pair invalid-unknown; mutate_unknown "$RUNNER_TEMP/invalid-unknown" false; mutate_unknown "$RUNNER_TEMP/invalid-unknown-replay" false
+          bash scripts/conform-released-envelope-v2.sh "$RUNNER_TEMP/invalid-unknown" "$RUNNER_TEMP/invalid-unknown-replay" "$RUNNER_TEMP/counter-reports/02-unknown.json"
+
+          make_pair duplicate-relation
+          for bundle in "$RUNNER_TEMP/duplicate-relation" "$RUNNER_TEMP/duplicate-relation-replay"; do
+            first=$(head -n1 "$bundle/relations.ndjson"|jq -r .id)
+            jq -cS --arg first "$first" '.[1].id=$first|.[]' < <(jq -s '.' "$bundle/relations.ndjson") > "$bundle/relations.tmp"; mv "$bundle/relations.tmp" "$bundle/relations.ndjson"
+            jq -cS --arg first "$first" '.[1].relation_id=$first|.[]' < <(jq -s '.' "$bundle/evidence.ndjson") > "$bundle/evidence.tmp"; mv "$bundle/evidence.tmp" "$bundle/evidence.ndjson"
+            jq -cS --arg first "$first" '.[1].relation_id=$first|.[]' < <(jq -s '.' "$bundle/resolutions.ndjson") > "$bundle/resolutions.tmp"; mv "$bundle/resolutions.tmp" "$bundle/resolutions.ndjson"
+            refresh "$bundle"
+          done
+          bash scripts/conform-released-envelope-v2.sh "$RUNNER_TEMP/duplicate-relation" "$RUNNER_TEMP/duplicate-relation-replay" "$RUNNER_TEMP/counter-reports/03-duplicate.json"
+
+          make_pair replay-mismatch
+          for bundle in "$RUNNER_TEMP/replay-mismatch" "$RUNNER_TEMP/replay-mismatch-replay"; do jq '.source.comparisons_satisfied-=1' "$bundle/replay.json" > "$bundle/replay.tmp"; mv "$bundle/replay.tmp" "$bundle/replay.json"; refresh "$bundle"; done
+          bash scripts/conform-released-envelope-v2.sh "$RUNNER_TEMP/replay-mismatch" "$RUNNER_TEMP/replay-mismatch-replay" "$RUNNER_TEMP/counter-reports/04-replay.json"
+
+          make_pair authority-escalation
+          for bundle in "$RUNNER_TEMP/authority-escalation" "$RUNNER_TEMP/authority-escalation-replay"; do jq '.authority.product_generation_authorized=true' "$bundle/project.json" > "$bundle/project.tmp"; mv "$bundle/project.tmp" "$bundle/project.json"; refresh "$bundle"; done
+          bash scripts/conform-released-envelope-v2.sh "$RUNNER_TEMP/authority-escalation" "$RUNNER_TEMP/authority-escalation-replay" "$RUNNER_TEMP/counter-reports/05-authority.json"
+
+          jq -S -s '{schema:"gooo/interchange/released-domain-counterexamples/v2",total:length,fail_closed:([.[]|select(.decision=="FAIL_CLOSED")]|length),reasons:[.[].claim.reason]}' "$RUNNER_TEMP"/counter-reports/*.json > "$RUNNER_TEMP/counterexamples.json"
+          jq -e '.total==5 and .fail_closed==5' "$RUNNER_TEMP/counterexamples.json" >/dev/null
+      - name: Evaluate the v2 specification through Gooo
+        run: |
+          set -euo pipefail
+          repository_files=$(find . -type f -not -path './.git/*' -not -path './README.md' | wc -l | tr -d ' ')
+          descendant_directories=$(find . -mindepth 1 -type d -not -path './.git' -not -path './.git/*' | wc -l | tr -d ' ')
+          go_files=$(find . -type f -name '*.go' -not -path './.git/*' | wc -l | tr -d ' '); go_lines=0; if test "$go_files" -gt 0; then go_lines=$(find . -type f -name '*.go' -not -path './.git/*' -print0|xargs -0 wc -l|tail -1|awk '{print $1}'); fi
+          gooo_files=$(find . -type f -name '*.gooo' -not -path './.git/*' | wc -l | tr -d ' '); gooo_lines=$(find . -type f -name '*.gooo' -not -path './.git/*' -print0|xargs -0 wc -l|tail -1|awk '{print $1}')
+          jq --argjson repository_files "$repository_files" --argjson descendant_directories "$descendant_directories" --argjson go_files "$go_files" --argjson go_lines "$go_lines" --argjson gooo_files "$gooo_files" --argjson gooo_lines "$gooo_lines" '.+{inventory:{repository_files:$repository_files,descendant_directories:$descendant_directories,go:{files:$go_files,lines:$go_lines},gooo:{files:$gooo_files,lines:$gooo_lines},root_readme_excluded:true}}' "$RUNNER_TEMP/runtime-base.json" > "$RUNNER_TEMP/runtime.json"
+          evaluator=scripts/evaluate-released-envelope-v2.sh
+          args=("$RUNNER_TEMP/graph.json" "$RUNNER_TEMP/core-resolution-observation.json" contracts/released-domain-envelope-denominator-v2.json contracts/released-domain-envelope-release-lock-v2.json "$RUNNER_TEMP/release-observation.json" "$RUNNER_TEMP/aggregate.json" "$RUNNER_TEMP/counterexamples.json" "$RUNNER_TEMP/runtime.json")
+          bash "$evaluator" "${args[@]}" "$RUNNER_TEMP/specification-report.json" normal
+          bash "$evaluator" "${args[@]}" "$RUNNER_TEMP/specification-replay.json" normal
+          cmp -s "$RUNNER_TEMP/specification-report.json" "$RUNNER_TEMP/specification-replay.json"
+          jq -e '.decision=="SPECIFICATION_PROJECTION_CONFORMANT" and .summary=={total_cells:12,closed_cells:12,unknown_cells:0,refuted_cells:0,products:3,envelopes:3,files:24,relations:20,evidence:20,resolutions:20,source_replay_receipts:3,source_replay_comparisons_satisfied:19,source_replay_comparisons_total:19,valid_unknown_cases:1,refuted_counterexamples:5} and .adoption.released_domain_adoption=={observed:0,total:3} and .authority.product_generation_authorized==false and all(.proofs[];.closed==.total) and all(.indicator_classes[];.closed==.total)' "$RUNNER_TEMP/specification-report.json" >/dev/null
+          jq '.products["design-evidence"].release_verified=false' "$RUNNER_TEMP/release-observation.json" > "$RUNNER_TEMP/missing-design-release.json"
+          missing_args=("$RUNNER_TEMP/graph.json" "$RUNNER_TEMP/core-resolution-observation.json" contracts/released-domain-envelope-denominator-v2.json contracts/released-domain-envelope-release-lock-v2.json "$RUNNER_TEMP/missing-design-release.json" "$RUNNER_TEMP/aggregate.json" "$RUNNER_TEMP/counterexamples.json" "$RUNNER_TEMP/runtime.json")
+          bash "$evaluator" "${missing_args[@]}" "$RUNNER_TEMP/missing-design.json" missing-design
+          jq -e '.decision=="INCOMPLETE" and .summary.closed_cells==3 and .summary.unknown_cells==9 and .claim.unknown_class=="DIRECT_MISSING"' "$RUNNER_TEMP/missing-design.json" >/dev/null
+          jq '.product_generation_authorized=true' "$RUNNER_TEMP/runtime.json" > "$RUNNER_TEMP/escalated-runtime.json"
+          escalation_args=("$RUNNER_TEMP/graph.json" "$RUNNER_TEMP/core-resolution-observation.json" contracts/released-domain-envelope-denominator-v2.json contracts/released-domain-envelope-release-lock-v2.json "$RUNNER_TEMP/release-observation.json" "$RUNNER_TEMP/aggregate.json" "$RUNNER_TEMP/counterexamples.json" "$RUNNER_TEMP/escalated-runtime.json")
+          bash "$evaluator" "${escalation_args[@]}" "$RUNNER_TEMP/authority-refuted.json" authority-escalation
+          jq -e '.decision=="FAIL_CLOSED" and .summary.closed_cells==11 and .summary.refuted_cells==1 and .claim.reason=="READ_ONLY_AUTHORITY_ESCALATED"' "$RUNNER_TEMP/authority-refuted.json" >/dev/null
+          jq '.receipts[0].decision="FIXED_POINT"' "$RUNNER_TEMP/core-resolution-observation.json" > "$RUNNER_TEMP/invalid-core.json"
+          core_args=("$RUNNER_TEMP/graph.json" "$RUNNER_TEMP/invalid-core.json" contracts/released-domain-envelope-denominator-v2.json contracts/released-domain-envelope-release-lock-v2.json "$RUNNER_TEMP/release-observation.json" "$RUNNER_TEMP/aggregate.json" "$RUNNER_TEMP/counterexamples.json" "$RUNNER_TEMP/runtime.json")
+          bash "$evaluator" "${core_args[@]}" "$RUNNER_TEMP/invalid-core-decision.json" invalid-core-decision
+          jq -e '.decision=="FAIL_CLOSED" and .summary.closed_cells==0 and .summary.refuted_cells==12 and .claim.reason=="UNRECOGNIZED_CORE_ACTIVITY_RESOLUTION_DECISION"' "$RUNNER_TEMP/invalid-core-decision.json" >/dev/null
+      - name: Publish exact human-readable metrics
+        run: |
+          {
+            echo '## Released-domain envelope v2'
+            echo
+            jq -r '"- decision: \(.decision)","- meta cells: \(.summary.closed_cells)/\(.summary.total_cells) CLOSED","- specification projections: \(.adoption.specification_owned_projections.observed)/\(.adoption.specification_owned_projections.total)","- released domain adoption: \(.adoption.released_domain_adoption.observed)/\(.adoption.released_domain_adoption.total)","- envelopes: \(.summary.envelopes)/3","- generated files: \(.summary.files)/24","- relations/evidence/resolutions: \(.summary.relations)/\(.summary.evidence)/\(.summary.resolutions)","- source replay receipts: \(.summary.source_replay_receipts)/3","- source replay comparisons: \(.summary.source_replay_comparisons_satisfied)/\(.summary.source_replay_comparisons_total)","- valid UNKNOWN cases: \(.summary.valid_unknown_cases)/1 with 6/6 coordinates","- REFUTED counterexamples: \(.summary.refuted_counterexamples)/5","- product generation authorized: \(.authority.product_generation_authorized)","- external required gates: \(.authority.cross_project_required_gates)"' "$RUNNER_TEMP/specification-report.json"
+            jq -r '"- projection peak RSS: \(.projection.peak_rss_kib) KiB","- projection wall time: \(.projection.wall_ms) ms","- Go: \(.inventory.go.files) files / \(.inventory.go.lines) lines","- Gooo: \(.inventory.gooo.files) files / \(.inventory.gooo.lines) lines","- repository files: \(.inventory.repository_files)","- descendant directories: \(.inventory.descendant_directories)","- root README: excluded","- repository writes: \(.repository_writes)","- local tests: \(.local_tests_run)","- Go version: \(.go_version)"' "$RUNNER_TEMP/runtime.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Enforce zero source writes
+        run: test -z "$(git status --porcelain=v1 --untracked-files=all)"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: released-domain-envelope-v2-${{ env.SUBJECT_SHA }}
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/specification-report.json
+            ${{ runner.temp }}/specification-replay.json
+            ${{ runner.temp }}/missing-design.json
+            ${{ runner.temp }}/authority-refuted.json
+            ${{ runner.temp }}/invalid-core-decision.json
+            ${{ runner.temp }}/counterexamples.json
+            ${{ runner.temp }}/valid-unknown-report.json
+            ${{ runner.temp }}/aggregate.json
+            ${{ runner.temp }}/runtime.json
+            ${{ runner.temp }}/release-observation.json
+            ${{ runner.temp }}/core-resolution-observation.json
+            ${{ runner.temp }}/bundles

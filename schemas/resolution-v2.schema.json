@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gooo://schema/interchange/resolution/v2",
+  "type": "object",
+  "required": ["schema", "relation_id", "state", "stage", "step", "reason", "unknown_class", "next_operation", "blocked_by", "authority"],
+  "properties": {
+    "schema": {"const": "gooo/interchange/resolution/v2"},
+    "relation_id": {"type": "string", "minLength": 1},
+    "state": {"enum": ["CLOSED", "UNKNOWN", "REFUTED"]},
+    "stage": {"type": ["string", "null"]},
+    "step": {"type": ["string", "null"]},
+    "reason": {"type": "string", "minLength": 1},
+    "unknown_class": {"type": ["string", "null"]},
+    "next_operation": {"type": "string", "minLength": 1},
+    "blocked_by": {"type": "array", "items": {"type": "string"}},
+    "authority": {"const": {"source": "RELEASED_PRODUCT_EVIDENCE", "state_inference_authorized": false}}
+  },
+  "allOf": [
+    {"if": {"properties": {"state": {"const": "CLOSED"}}}, "then": {"properties": {"stage": {"type": "null"}, "step": {"type": "null"}, "unknown_class": {"type": "null"}, "next_operation": {"const": "NONE"}, "blocked_by": {"maxItems": 0}}}},
+    {"if": {"properties": {"state": {"const": "UNKNOWN"}}}, "then": {"properties": {"stage": {"type": "string", "minLength": 1}, "step": {"type": "string", "minLength": 1}, "unknown_class": {"type": "string", "minLength": 1}, "next_operation": {"not": {"const": "NONE"}}}}},
+    {"if": {"properties": {"state": {"const": "REFUTED"}}}, "then": {"properties": {"stage": {"type": "string", "minLength": 1}, "step": {"type": "string", "minLength": 1}, "unknown_class": {"type": "null"}, "next_operation": {"not": {"const": "NONE"}}}}}
+  ]
+}

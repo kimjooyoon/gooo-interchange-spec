@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gooo://schema/interchange/conformance/v2",
+  "type": "object",
+  "required": ["schema", "required_files", "required_local_checks", "external_required_gates", "repository_writes", "product_generation_authorized"],
+  "properties": {
+    "schema": {"const": "gooo/interchange/conformance/v2"},
+    "required_files": {"const": 8},
+    "required_local_checks": {"type": "array", "minItems": 10, "maxItems": 10, "uniqueItems": true},
+    "external_required_gates": {"const": 0},
+    "repository_writes": {"const": 0},
+    "product_generation_authorized": {"const": false}
+  }
+}
